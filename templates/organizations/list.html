@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Organizations - Claude Compliance{% endblock %}
+{% block page_title %}Organizations{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if organizations %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="orgTable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>ID</th>
+                    <th>UUID</th>
+                    <th>Created</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for org in organizations %}
+                <tr>
+                    <td class="fw-bold" data-sort="{{ org.name or '' }}">{{ org.name or 'N/A' }}</td>
+                    <td class="mono" data-sort="{{ org.id or '' }}">{{ org.id or '' }}</td>
+                    <td class="mono" data-sort="{{ org.uuid or '' }}">{{ org.uuid or '' }}</td>
+                    <td class="text-nowrap" data-sort="{{ org.created_at or '' }}">{{ org.created_at|format_dt }}</td>
+                    <td class="text-end">
+                        <a href="{{ url_for('organizations.users', org_uuid=org.uuid) }}"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-people me-1"></i>View Users
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="mt-3 text-muted small">{{ organizations|length }} organization(s)</div>
+{% elif not error %}
+<div class="empty-state">
+    <i class="bi bi-building d-block"></i>
+    <h5>No organizations found</h5>
+    <p>Ensure your Anthropic Compliance API key is configured in Settings.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var table = document.getElementById('orgTable');
+    if (table) {
+        new TableManager(table, {
+            id: 'organizations',
+            columns: [
+                { key: 'name', label: 'Name' },
+                { key: 'id', label: 'ID' },
+                { key: 'uuid', label: 'UUID' },
+                { key: 'created', label: 'Created', type: 'date' },
+                { key: 'actions', label: 'Actions', sortable: false, align: 'end' },
+            ],
+            defaultSort: { key: 'created', dir: 'desc' },
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,728 @@
+{% extends "base.html" %}
+{% block title %}Activity Feed - Claude Compliance{% endblock %}
+{% block page_title %}Activity Feed{% endblock %}
+
+{% block content %}
+<!-- Filter Bar -->
+<div class="filter-bar" id="filterBar">
+    <form method="GET" action="{{ url_for('activities.index') }}" id="filterForm">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label>From ({{ tz_abbr }})</label>
+                <input type="datetime-local" class="form-control" name="created_at_gte"
+                       value="{{ filters.get('created_at_gte', '') }}">
+            </div>
+            <div class="col-md-3">
+                <label>To ({{ tz_abbr }})</label>
+                <input type="datetime-local" class="form-control" name="created_at_lte"
+                       value="{{ filters.get('created_at_lte', '') }}">
+            </div>
+            <div class="col-md-3">
+                <label>Organization ID(s)</label>
+                <input type="text" class="form-control" name="organization_ids"
+                       value="{{ filters.get('organization_ids', '') }}" placeholder="org_abc, org_def">
+            </div>
+            <div class="col-md-3">
+                <label>Actor(s)</label>
+                <input type="hidden" name="actor_ids" id="actorIdsHidden" value="{{ filters.get('actor_ids', '') }}">
+                <div class="dropdown w-100">
+                    <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
+                            type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="actorDropdownBtn">
+                        <span id="actorDropdownLabel">
+                            {% if filters.get('actor_ids', '') %}
+                                {{ filters.get('actor_ids', '').split(',')|length }} actor(s) selected
+                            {% else %}
+                                All actors
+                            {% endif %}
+                        </span>
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu p-3 shadow" style="width:360px;max-height:380px;overflow-y:auto" id="actorDropdownMenu">
+                        <div class="text-center py-3 text-muted" id="actorLoadingArea">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <span class="ms-1 small">Loading users...</span>
+                        </div>
+                        <div id="actorListArea" class="d-none">
+                            <div class="mb-2">
+                                <input type="text" class="form-control form-control-sm" id="actorSearchInput" placeholder="Search users...">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong class="small text-uppercase text-muted">Select Actors</strong>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-link p-0 me-2" id="actorSelectAll">All</button>
+                                    <button type="button" class="btn btn-sm btn-link p-0" id="actorClearAll">Clear</button>
+                                </div>
+                            </div>
+                            <div id="actorCheckboxes"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label>Activity Type(s)</label>
+                <div class="dropdown w-100">
+                    <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
+                            type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="typeDropdownBtn">
+                        <span id="typeDropdownLabel">
+                            {% if filters.get('activity_types') %}
+                                {{ filters.activity_types|length }} type(s) selected
+                            {% else %}
+                                All activity types
+                            {% endif %}
+                        </span>
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu p-3 shadow" style="width:520px;max-height:420px;overflow-y:auto">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="small text-uppercase text-muted">Select Activity Types</strong>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-link p-0 me-2" id="typeSelectAll">Select All</button>
+                                <button type="button" class="btn btn-sm btn-link p-0" id="typeClearAll">Clear</button>
+                            </div>
+                        </div>
+                        {% for category, types in activity_types.items() %}
+                        <div class="mb-2">
+                            <div class="d-flex align-items-center mb-1">
+                                <input class="form-check-input me-2 type-category-toggle" type="checkbox"
+                                       id="cat_{{ category }}" data-category="{{ category }}">
+                                <label class="form-check-label fw-bold small" for="cat_{{ category }}">{{ category }}</label>
+                                <span class="badge bg-light text-dark ms-auto" style="font-size:10px">{{ types|length }}</span>
+                            </div>
+                            <div class="ms-4">
+                                {% for t in types %}
+                                <div class="form-check form-check-sm">
+                                    <input class="form-check-input type-checkbox" type="checkbox"
+                                           name="activity_types" value="{{ t }}" id="type_{{ t }}"
+                                           data-category="{{ category }}"
+                                           {{ 'checked' if t in (filters.get('activity_types') or []) }}>
+                                    <label class="form-check-label" for="type_{{ t }}" style="font-size:12px">{{ t }}</label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <div id="otherTypesContainer" class="mb-2 d-none"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label>Limit</label>
+                <select class="form-select" name="limit">
+                    {% for v in [25, 50, 100, 250, 500, 1000] %}
+                    <option value="{{ v }}" {{ "selected" if filters.get('limit', '50')|string == v|string }}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Search</button>
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-outline-secondary w-100" id="clearFiltersBtn">Clear</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Error (shown by JS) -->
+<div id="listError" class="alert alert-danger d-none"></div>
+
+<!-- Keyword search bar -->
+<div class="d-flex align-items-center gap-2 mb-2" id="activityKeywordBar">
+    <div class="input-group input-group-sm" style="max-width:360px">
+        <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" class="form-control" id="activityKeywordInput" placeholder="Filter results by keyword...">
+        <button class="btn btn-outline-secondary" id="activityKeywordClear" type="button" title="Clear filter"><i class="bi bi-x"></i></button>
+    </div>
+    <span class="text-muted small" id="activityKeywordCount"></span>
+</div>
+
+<!-- Results table (always present; rows filled by JS) -->
+<div id="resultsArea">
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="activityTable">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Type</th>
+                        <th>Actor</th>
+                        <th>Organization</th>
+                        <th>ID</th>
+                        <th class="text-end">File</th>
+                    </tr>
+                </thead>
+                <tbody id="activityTableBody">
+                    <tr><td colspan="6" class="text-center py-5">
+                        <div class="spinner-border text-muted" role="status"></div>
+                        <p class="text-muted small mt-2 mb-0">Loading activities...</p>
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="paginationArea" class="d-flex justify-content-between align-items-center mt-3 d-none"></div>
+</div>
+
+<!-- Empty state (shown by JS when no results) -->
+<div id="emptyState" class="empty-state d-none">
+    <i class="bi bi-activity d-block"></i>
+    <h5>No activities found</h5>
+    <p>Adjust your filters or date range to find activities.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var STORAGE_KEY = 'claude_compliance_activity_filters';
+    var checkboxes = document.querySelectorAll('.type-checkbox');
+    var categoryToggles = document.querySelectorAll('.type-category-toggle');
+    var label = document.getElementById('typeDropdownLabel');
+    var form = document.getElementById('filterForm');
+
+    function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function escAttr(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+    // Shared DOM refs
+    var tbody = document.getElementById('activityTableBody');
+
+    // Build set of all known activity type strings for "Other" detection
+    var KNOWN_TYPES = {};
+    {% for cat, types in activity_types.items() %}
+    {% for t in types %}KNOWN_TYPES['{{ t }}'] = true;
+    {% endfor %}{% endfor %}
+    var streamedTypes = [];  // collect types seen during streaming
+
+    // ── TableManager initialization ──────────────────────────
+    var activityTM = new TableManager(document.getElementById('activityTable'), {
+        id: 'activities',
+        columns: [
+            { key: 'timestamp', label: 'Timestamp', type: 'date' },
+            { key: 'type', label: 'Type' },
+            { key: 'actor', label: 'Actor' },
+            { key: 'organization', label: 'Organization' },
+            { key: 'id', label: 'ID' },
+            { key: 'file', label: 'File', sortable: false, align: 'end' },
+        ],
+        defaultSort: { key: 'timestamp', dir: 'desc' },
+    });
+
+    // ── Timezone-aware date formatting ──────────────────────
+    var DISPLAY_TZ = '{{ display_timezone|default("UTC") }}';
+    function formatDt(isoStr) {
+        if (!isoStr) return '';
+        try {
+            var d = new Date(isoStr.endsWith('Z') || isoStr.includes('+') ? isoStr : isoStr + 'Z');
+            if (isNaN(d.getTime())) return isoStr.substring(0, 19);
+            return d.toLocaleString('en-CA', {
+                timeZone: DISPLAY_TZ,
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                hour12: false
+            }).replace(',', '');
+        } catch(e) { return isoStr.substring(0, 19); }
+    }
+
+    // ── Dropdown label & category toggle helpers ──────────────
+    function updateLabel() {
+        var checked = document.querySelectorAll('.type-checkbox:checked');
+        if (checked.length === 0) {
+            label.textContent = 'All activity types';
+        } else if (checked.length <= 3) {
+            var names = [];
+            checked.forEach(function(cb) { names.push(cb.value); });
+            label.textContent = names.join(', ');
+        } else {
+            label.textContent = checked.length + ' type(s) selected';
+        }
+    }
+
+    function updateCategoryToggle(category) {
+        var catCheckboxes = document.querySelectorAll('.type-checkbox[data-category="' + category + '"]');
+        var catToggle = document.querySelector('.type-category-toggle[data-category="' + category + '"]');
+        if (!catToggle) return;
+        var allChecked = true, someChecked = false;
+        catCheckboxes.forEach(function(cb) {
+            if (cb.checked) someChecked = true;
+            else allChecked = false;
+        });
+        catToggle.checked = allChecked;
+        catToggle.indeterminate = someChecked && !allChecked;
+    }
+
+    checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            updateCategoryToggle(this.dataset.category);
+            updateLabel();
+        });
+    });
+
+    categoryToggles.forEach(function(toggle) {
+        toggle.addEventListener('change', function() {
+            var cat = this.dataset.category;
+            var checked = this.checked;
+            document.querySelectorAll('.type-checkbox[data-category="' + cat + '"]').forEach(function(cb) {
+                cb.checked = checked;
+            });
+            updateLabel();
+        });
+    });
+
+    document.getElementById('typeSelectAll').addEventListener('click', function() {
+        checkboxes.forEach(function(cb) { cb.checked = true; });
+        categoryToggles.forEach(function(ct) { ct.checked = true; ct.indeterminate = false; });
+        updateLabel();
+    });
+
+    document.getElementById('typeClearAll').addEventListener('click', function() {
+        checkboxes.forEach(function(cb) { cb.checked = false; });
+        categoryToggles.forEach(function(ct) { ct.checked = false; ct.indeterminate = false; });
+        updateLabel();
+    });
+
+    categoryToggles.forEach(function(toggle) {
+        updateCategoryToggle(toggle.dataset.category);
+    });
+
+    // ── localStorage filter persistence ──────────────────────
+    function saveFilters() {
+        var data = {};
+        form.querySelectorAll('input[type="text"], input[type="hidden"], input[type="datetime-local"], select').forEach(function(el) {
+            if (el.name) data[el.name] = el.value;
+        });
+        var types = [];
+        checkboxes.forEach(function(cb) {
+            if (cb.checked) types.push(cb.value);
+        });
+        data['activity_types'] = types;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+    }
+
+    function restoreFilters() {
+        var raw;
+        try { raw = localStorage.getItem(STORAGE_KEY); } catch(e) { return false; }
+        if (!raw) return false;
+        var data;
+        try { data = JSON.parse(raw); } catch(e) { return false; }
+
+        var hasValues = false;
+        form.querySelectorAll('input[type="text"], input[type="hidden"], input[type="datetime-local"], select').forEach(function(el) {
+            if (el.name && data[el.name]) {
+                el.value = data[el.name];
+                if (data[el.name]) hasValues = true;
+            }
+        });
+        if (data['activity_types'] && data['activity_types'].length > 0) {
+            hasValues = true;
+            var selectedSet = {};
+            data['activity_types'].forEach(function(t) { selectedSet[t] = true; });
+            checkboxes.forEach(function(cb) {
+                cb.checked = !!selectedSet[cb.value];
+            });
+            categoryToggles.forEach(function(toggle) {
+                updateCategoryToggle(toggle.dataset.category);
+            });
+            updateLabel();
+        }
+        return hasValues;
+    }
+
+    form.addEventListener('submit', function() { saveFilters(); });
+
+    // On page load: save URL params to localStorage, or restore from localStorage
+    var urlParams = new URLSearchParams(window.location.search);
+    var isCleared = urlParams.has('_clear');
+    var hasQueryParams = window.location.search.length > 1 && !isCleared;
+    if (hasQueryParams) {
+        saveFilters();
+    } else if (!isCleared) {
+        restoreFilters();
+    }
+
+    // ── Actor dropdown ─────────────────────────────────────────
+    var actorHidden = document.getElementById('actorIdsHidden');
+    var actorLabel = document.getElementById('actorDropdownLabel');
+    var actorLoadingArea = document.getElementById('actorLoadingArea');
+    var actorListArea = document.getElementById('actorListArea');
+    var actorCheckboxes = document.getElementById('actorCheckboxes');
+    var actorSearchInput = document.getElementById('actorSearchInput');
+    var actorDropdownBtn = document.getElementById('actorDropdownBtn');
+    var actorUsersLoaded = false;
+    var allActorUsers = [];
+
+    // Pre-selected actor IDs from the hidden input
+    var preSelectedActors = {};
+    var preSelectedCount = 0;
+    (actorHidden.value || '').split(',').forEach(function(id) {
+        id = id.trim();
+        if (id) { preSelectedActors[id] = true; preSelectedCount++; }
+    });
+    // Update label from hidden value on page load (before checkboxes exist)
+    if (preSelectedCount > 0) {
+        actorLabel.textContent = preSelectedCount + ' actor(s) selected';
+    }
+
+    function updateActorLabel() {
+        var checked = document.querySelectorAll('.actor-checkbox:checked');
+        if (checked.length === 0) {
+            actorLabel.textContent = 'All actors';
+            actorHidden.value = '';
+        } else if (checked.length === 1) {
+            var el = checked[0];
+            actorLabel.textContent = el.dataset.label || el.value;
+            actorHidden.value = el.value;
+        } else {
+            actorLabel.textContent = checked.length + ' actor(s) selected';
+            var ids = [];
+            checked.forEach(function(cb) { ids.push(cb.value); });
+            actorHidden.value = ids.join(',');
+        }
+    }
+
+    function renderActorList(filter) {
+        filter = (filter || '').toLowerCase();
+        var html = '';
+        allActorUsers.forEach(function(u) {
+            var display = u.name ? u.name + ' (' + u.email + ')' : u.email || u.id;
+            if (filter && display.toLowerCase().indexOf(filter) === -1 && u.id.toLowerCase().indexOf(filter) === -1) return;
+            var checked = preSelectedActors[u.id] ? ' checked' : '';
+            html += '<div class="form-check form-check-sm">';
+            html += '<input class="form-check-input actor-checkbox" type="checkbox" value="' + esc(u.id) + '"'
+                  + ' id="actor_' + esc(u.id) + '" data-label="' + esc(u.name || u.email) + '"' + checked + '>';
+            html += '<label class="form-check-label" for="actor_' + esc(u.id) + '" style="font-size:12px">';
+            if (u.name) html += esc(u.name) + ' <span class="text-muted">(' + esc(u.email) + ')</span>';
+            else html += esc(u.email || u.id);
+            html += '</label></div>';
+        });
+        if (!html) html = '<p class="text-muted small mb-0">No users found.</p>';
+        actorCheckboxes.innerHTML = html;
+
+        // Bind change events
+        document.querySelectorAll('.actor-checkbox').forEach(function(cb) {
+            cb.addEventListener('change', updateActorLabel);
+        });
+    }
+
+    function loadActorUsers() {
+        if (actorUsersLoaded) return;
+        fetch('{{ url_for("activities.api_users") }}')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                allActorUsers = data.users || [];
+                actorUsersLoaded = true;
+                actorLoadingArea.classList.add('d-none');
+                actorListArea.classList.remove('d-none');
+                renderActorList('');
+                updateActorLabel();
+            })
+            .catch(function() {
+                actorLoadingArea.innerHTML = '<p class="text-danger small mb-0">Failed to load users.</p>';
+            });
+    }
+
+    // Load users when dropdown opens
+    actorDropdownBtn.addEventListener('click', function() { loadActorUsers(); });
+
+    // Search filter
+    actorSearchInput.addEventListener('input', function() { renderActorList(this.value); });
+
+    // Select All / Clear
+    document.getElementById('actorSelectAll').addEventListener('click', function() {
+        document.querySelectorAll('.actor-checkbox').forEach(function(cb) { cb.checked = true; });
+        updateActorLabel();
+    });
+    document.getElementById('actorClearAll').addEventListener('click', function() {
+        document.querySelectorAll('.actor-checkbox').forEach(function(cb) { cb.checked = false; });
+        preSelectedActors = {};
+        updateActorLabel();
+    });
+
+    // ── Build query string from current form state ───────────
+    function getFormQueryString() {
+        var p = new URLSearchParams();
+        form.querySelectorAll('input[type="text"], input[type="hidden"], input[type="datetime-local"], select').forEach(function(el) {
+            if (el.name && el.value) p.set(el.name, el.value);
+        });
+        document.querySelectorAll('.type-checkbox:checked').forEach(function(cb) {
+            p.append('activity_types', cb.value);
+        });
+        // Carry over pagination params from URL
+        var u = new URLSearchParams(window.location.search);
+        if (u.get('after_id')) p.set('after_id', u.get('after_id'));
+        if (u.get('before_id')) p.set('before_id', u.get('before_id'));
+        return p.toString();
+    }
+
+    // ── Helpers shared by stream handler ────────────────────────
+    function buildRow(a) {
+        var detailUrl = '/activities/' + encodeURIComponent(a.id);
+        var searchText = [a.type, a.actor_email, a.organization_id, a.id].filter(Boolean).join(' ').toLowerCase();
+        var html = '<tr class="activity-row" data-url="' + detailUrl + '" data-search="' + escAttr(searchText) + '" style="cursor:pointer">';
+        html += '<td class="text-nowrap" data-sort="' + escAttr(a.created_at || '') + '">' + esc(formatDt(a.created_at)) + '</td>';
+        html += '<td data-sort="' + escAttr(a.type || '') + '"><span class="badge bg-secondary badge-activity">' + esc(a.type || '') + '</span></td>';
+        html += '<td data-sort="' + escAttr(a.actor_email || '') + '">' + esc(a.actor_email || '') + '</td>';
+        html += '<td class="org-name-cell" data-org-id="' + escAttr(a.organization_id || '') + '" data-sort="' + escAttr(a.organization_id || '') + '"><span class="mono small">' + esc((a.organization_id || '').substring(0, 16)) + '</span></td>';
+        html += '<td class="mono" data-sort="' + escAttr(a.id || '') + '">' + esc((a.id || '').substring(0, 20)) + '...</td>';
+        html += '<td class="text-end">';
+        if (a.file_id) {
+            html += '<a href="/activities/files/' + encodeURIComponent(a.file_id) + '/download" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="event.stopPropagation()" title="Download file"><i class="bi bi-download"></i></a>';
+        }
+        html += '</td></tr>';
+        return html;
+    }
+
+    function bindNewRows() {
+        tbody.querySelectorAll('.activity-row:not([data-bound])').forEach(function(row) {
+            row.dataset.bound = '1';
+            row.addEventListener('click', function(e) {
+                if (e.target.closest('a, button')) return;
+                window.location = row.dataset.url + '?sid=1';
+            });
+        });
+    }
+
+    // ── Keyword row filter ────────────────────────────────────
+    var _kwQuery = '';
+
+    function filterRows() {
+        var q = _kwQuery;
+        var rows = tbody.querySelectorAll('tr.activity-row');
+        var shown = 0, total = rows.length;
+        rows.forEach(function(row) {
+            // data-search was set at build time; also check live org-name text
+            var text = (row.dataset.search || '');
+            var orgCell = row.querySelector('.org-name-cell');
+            if (orgCell) text += ' ' + orgCell.textContent.toLowerCase();
+            var match = !q || text.indexOf(q) !== -1;
+            row.style.display = match ? '' : 'none';
+            if (match) shown++;
+        });
+        var countEl = document.getElementById('activityKeywordCount');
+        if (countEl) {
+            if (q) {
+                countEl.textContent = shown + ' of ' + total + ' match' + (shown === 1 ? '' : 'es');
+            } else {
+                countEl.textContent = total > 0 ? total + ' result' + (total === 1 ? '' : 's') : '';
+            }
+        }
+    }
+
+    (function() {
+        var kwInput = document.getElementById('activityKeywordInput');
+        var kwClear = document.getElementById('activityKeywordClear');
+        if (!kwInput) return;
+        kwInput.addEventListener('input', function() {
+            _kwQuery = this.value.trim().toLowerCase();
+            filterRows();
+        });
+        if (kwClear) {
+            kwClear.addEventListener('click', function() {
+                kwInput.value = '';
+                _kwQuery = '';
+                filterRows();
+            });
+        }
+    })();
+
+    function applyOrgNames(names) {
+        document.querySelectorAll('.org-name-cell').forEach(function(cell) {
+            var oid = cell.dataset.orgId;
+            if (oid && names[oid]) {
+                cell.innerHTML = '<span title="' + escAttr(oid) + '">' + esc(names[oid]) + '</span>';
+                cell.dataset.sort = names[oid];
+            }
+        });
+        if (activityTM) activityTM.refresh();
+        filterRows();
+    }
+
+    // ── Streaming fetch via Server-Sent Events ───────────────
+    var currentStream = null;
+
+    function fetchActivities() {
+        // Close any previous stream
+        if (currentStream) { currentStream.close(); currentStream = null; }
+
+        var qs;
+        if (hasQueryParams) {
+            var u = new URLSearchParams(window.location.search);
+            u.delete('_clear');
+            qs = u.toString();
+        } else {
+            qs = getFormQueryString();
+        }
+
+        var errorEl = document.getElementById('listError');
+        var resultsArea = document.getElementById('resultsArea');
+        var emptyState = document.getElementById('emptyState');
+
+        errorEl.classList.add('d-none');
+        resultsArea.classList.remove('d-none');
+        emptyState.classList.add('d-none');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5">' +
+            '<div class="spinner-border text-muted" role="status"></div>' +
+            '<p class="text-muted small mt-2 mb-0">Loading activities\u2026</p></td></tr>';
+
+        // Pre-fetch org names in parallel — they're usually ready by the time
+        // the first activity rows arrive.
+        var orgNamesPromise = fetch('{{ url_for("activities.api_org_names") }}')
+            .then(function(r) { return r.json(); })
+            .catch(function() { return {}; });
+
+        var rowCount = 0;
+        var streamDone = false;
+
+        // Safety timeout: if no data arrives in 20 s, surface an error
+        var streamTimeout = setTimeout(function() {
+            if (currentStream && rowCount === 0) {
+                currentStream.close(); currentStream = null;
+                errorEl.textContent = 'Activity feed timed out. The API may be slow — try refreshing or narrowing your filters.';
+                errorEl.classList.remove('d-none');
+                tbody.innerHTML = '';
+            }
+        }, 20000);
+
+        var es = new EventSource('{{ url_for("activities.api_stream") }}' + (qs ? '?' + qs : ''));
+        currentStream = es;
+
+        // Each SSE message is one slim activity record
+        es.onmessage = function(event) {
+            var a = JSON.parse(event.data);
+            if (rowCount === 0) {
+                tbody.innerHTML = '';  // clear spinner on first row
+            }
+            if (a.type) streamedTypes.push(a.type);
+            tbody.insertAdjacentHTML('beforeend', buildRow(a));
+            rowCount++;
+            // Refresh sort and filter count every 25 rows to avoid excessive DOM work
+            if (rowCount % 25 === 0) {
+                if (activityTM) activityTM.refresh();
+                filterRows();
+            }
+            bindNewRows();
+        };
+
+        // Done event: server finished sending all records
+        es.addEventListener('done', function(event) {
+            streamDone = true;
+            clearTimeout(streamTimeout);
+            es.close(); currentStream = null;
+            var meta = JSON.parse(event.data);
+
+            if (rowCount === 0) {
+                resultsArea.classList.add('d-none');
+                emptyState.classList.remove('d-none');
+                return;
+            }
+
+            if (activityTM) activityTM.refresh();
+            bindNewRows();
+            filterRows();
+
+            // Resolve org names (promise may already be settled — .then() is sync if resolved)
+            orgNamesPromise.then(applyOrgNames);
+
+            // Inject "Other" category for any types not in known categories
+            (function() {
+                var unknownSet = {};
+                streamedTypes.forEach(function(t) {
+                    if (!KNOWN_TYPES[t] && !unknownSet[t]) unknownSet[t] = true;
+                });
+                var unknowns = Object.keys(unknownSet).sort();
+                if (!unknowns.length) return;
+                var container = document.getElementById('otherTypesContainer');
+                if (!container) return;
+                var h = '<div class="d-flex align-items-center mb-1">';
+                h += '<input class="form-check-input me-2 type-category-toggle" type="checkbox" id="cat_Other" data-category="Other">';
+                h += '<label class="form-check-label fw-bold small" for="cat_Other">Other / Uncategorized</label>';
+                h += '<span class="badge bg-light text-dark ms-auto" style="font-size:10px">' + unknowns.length + '</span></div>';
+                h += '<div class="ms-4">';
+                unknowns.forEach(function(t) {
+                    h += '<div class="form-check form-check-sm">';
+                    h += '<input class="form-check-input type-checkbox" type="checkbox" name="activity_types" value="' + escAttr(t) + '" id="type_' + escAttr(t) + '" data-category="Other">';
+                    h += '<label class="form-check-label" for="type_' + escAttr(t) + '" style="font-size:12px">' + esc(t) + '</label></div>';
+                });
+                h += '</div>';
+                container.innerHTML = h;
+                container.classList.remove('d-none');
+                // Bind change events for new checkboxes
+                container.querySelectorAll('.type-checkbox').forEach(function(cb) {
+                    cb.addEventListener('change', function() {
+                        updateCategoryToggle('Other');
+                        updateLabel();
+                    });
+                });
+                var catToggle = container.querySelector('.type-category-toggle');
+                if (catToggle) {
+                    catToggle.addEventListener('change', function() {
+                        var checked = this.checked;
+                        container.querySelectorAll('.type-checkbox').forEach(function(cb) { cb.checked = checked; });
+                        updateLabel();
+                    });
+                }
+            })();
+
+            // Pagination
+            var pagArea = document.getElementById('paginationArea');
+            var baseParams = new URLSearchParams(getFormQueryString());
+            baseParams.delete('after_id');
+            baseParams.delete('before_id');
+
+            var ph = '<span class="text-muted small">' + rowCount + ' result(s)</span><div class="d-flex gap-2">';
+            if (urlParams.get('after_id') && meta.first_id) {
+                var pp = new URLSearchParams(baseParams);
+                pp.set('before_id', meta.first_id);
+                ph += '<a href="{{ url_for("activities.index") }}?' + pp.toString() + '" class="btn btn-sm btn-outline-primary"><i class="bi bi-chevron-left me-1"></i>Previous</a>';
+            }
+            if (meta.has_more && meta.last_id) {
+                var np = new URLSearchParams(baseParams);
+                np.set('after_id', meta.last_id);
+                ph += '<a href="{{ url_for("activities.index") }}?' + np.toString() + '" class="btn btn-sm btn-outline-primary">Next<i class="bi bi-chevron-right ms-1"></i></a>';
+            }
+            ph += '</div>';
+            pagArea.innerHTML = ph;
+            pagArea.classList.remove('d-none');
+        });
+
+        // Named error event from server (API misconfigured, exception, etc.)
+        es.addEventListener('stream_error', function(event) {
+            streamDone = true;
+            clearTimeout(streamTimeout);
+            es.close(); currentStream = null;
+            var d = JSON.parse(event.data);
+            errorEl.textContent = d.error || 'An error occurred loading activities.';
+            errorEl.classList.remove('d-none');
+            tbody.innerHTML = '';
+        });
+
+        // Network-level error (connection dropped, server closed unexpectedly, etc.)
+        // NOTE: onerror also fires on a clean close (readyState=CLOSED) so we use
+        // streamDone to distinguish a normal finish from a real error.
+        es.onerror = function() {
+            if (streamDone) return;  // clean close — already handled by 'done' event
+            clearTimeout(streamTimeout);
+            es.close(); currentStream = null;
+            if (rowCount === 0) {
+                errorEl.textContent = 'Failed to load activities. Check your API key in Settings or try refreshing.';
+                errorEl.classList.remove('d-none');
+                tbody.innerHTML = '';
+            }
+        };
+
+        // Clean up stream if user navigates away
+        window.addEventListener('beforeunload', function() {
+            if (currentStream) { currentStream.close(); currentStream = null; }
+        }, { once: true });
+    }
+
+    // Kick off the data fetch immediately
+    fetchActivities();
+
+    // Clear button
+    document.getElementById('clearFiltersBtn').addEventListener('click', function() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+        window.location.href = '{{ url_for("activities.index") }}?_clear=1';
+    });
+});
+</script>
+{% endblock %}

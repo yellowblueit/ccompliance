@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block title %}{{ chat.name or 'Chat' }} — Claude Compliance{% endblock %}
+{% block page_title %}Chat Detail{% endblock %}
+
+{% block extra_head %}
+<style>
+.dc { border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05); background:#fff; }
+.dc-hd { background:#f9fafb; border-bottom:1px solid #f0f0f0; padding:8px 14px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#6b7280; display:flex; align-items:center; gap:6px; }
+.dc-hd i { font-size:13px; color:#9ca3af; }
+.dt { margin-bottom:0; }
+.dt td { padding:5px 14px; font-size:12px; border-color:#f5f5f5; vertical-align:middle; line-height:1.4; }
+.dt td:first-child { color:#9ca3af; font-weight:500; width:72px; white-space:nowrap; }
+.avatar-sm { width:36px; height:36px; border-radius:50%; background:#e9ecef; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }
+.avatar-sm img { width:100%; height:100%; object-fit:cover; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Compact Header ── -->
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2 min-w-0">
+        <a href="{{ url_for('chats.index') }}" class="btn btn-sm btn-outline-secondary flex-shrink-0">
+            <i class="bi bi-arrow-left me-1"></i>Back
+        </a>
+        <span class="fw-semibold text-truncate" style="font-size:14px;max-width:300px" title="{{ chat.name or 'Untitled Chat' }}">
+            {{ chat.name or 'Untitled Chat' }}
+        </span>
+        {% if 'view_chat_content' not in user_permissions %}
+        <span class="badge bg-warning text-dark flex-shrink-0" style="font-size:10px"><i class="bi bi-eye-slash me-1"></i>Restricted</span>
+        {% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+        <span class="text-muted" style="font-size:12px"><i class="bi bi-clock me-1"></i>{{ chat.created_at|format_dt or '' }}</span>
+        <code style="font-size:10px;background:#f3f4f6;padding:2px 7px;border-radius:4px;color:#374151">{{ chat.id[:24] }}…</code>
+        {% if 'delete_chats' in user_permissions %}
+        <button class="btn btn-sm btn-outline-danger" style="padding:3px 8px" data-bs-toggle="modal" data-bs-target="#deleteModal">
+            <i class="bi bi-trash"></i>
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+{% if error %}<div class="alert alert-danger py-2 mb-3">{{ error }}</div>{% endif %}
+
+<!-- ── Main Layout ── -->
+<div class="row g-3">
+
+    <!-- ── Left col: metadata ── -->
+    <div class="col-lg-4">
+
+        <!-- Chat Info -->
+        <div class="dc mb-2">
+            <div class="dc-hd"><i class="bi bi-info-circle"></i>Chat Info</div>
+            <table class="table dt">
+                <tr><td>Name</td><td>{{ chat.name or 'Untitled' }}</td></tr>
+                <tr><td>ID</td><td><span class="mono" style="font-size:10px;word-break:break-all">{{ chat.id }}</span></td></tr>
+                <tr><td>Org</td><td id="chatOrgCell">{% if chat.organization_id %}<span class="mono" style="font-size:10px">{{ chat.organization_id }}</span>{% else %}N/A{% endif %}</td></tr>
+                {% if chat.project_id %}
+                <tr><td>Project</td><td><span class="mono" style="font-size:10px">{{ chat.project_id }}</span></td></tr>
+                {% endif %}
+                <tr><td>Created</td><td style="font-size:11px">{{ chat.created_at|format_dt or 'N/A' }}</td></tr>
+                <tr><td>Updated</td><td style="font-size:11px">{{ chat.updated_at|format_dt or 'N/A' }}</td></tr>
+            </table>
+        </div>
+
+        <!-- User / Actor card (Entra profile merged in via JS) -->
+        <div class="dc">
+            <div class="dc-hd"><i class="bi bi-person-badge"></i>User</div>
+            <!-- Profile header — avatar + name updated async -->
+            <div class="d-flex align-items-center gap-2 px-3 pt-2 pb-1">
+                <div class="avatar-sm" id="chatUserPhotoEl">
+                    <i class="bi bi-person-fill text-muted" style="font-size:1.2rem"></i>
+                </div>
+                <div style="min-width:0;overflow:hidden">
+                    <div id="chatUserNameEl" style="font-size:12px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                        {% if chat.user %}{{ chat.user.get('email_address', '') }}{% else %}No user{% endif %}
+                    </div>
+                    <div id="chatUserTitleEl" class="text-muted" style="font-size:11px"></div>
+                </div>
+            </div>
+            <table class="table dt">
+                {% if chat.user %}
+                <tr><td>Email</td><td><strong style="font-size:12px">{{ chat.user.get('email_address', 'N/A') }}</strong></td></tr>
+                <tr><td>User ID</td><td><span class="mono" style="font-size:10px">{{ chat.user.get('id', 'N/A') }}</span></td></tr>
+                {% else %}
+                <tr><td colspan="2" class="text-muted text-center py-2" style="font-size:12px">No user information</td></tr>
+                {% endif %}
+            </table>
+            <!-- Entra rows appended here async -->
+            <div id="chatEntraRows"></div>
+        </div>
+
+    </div><!-- /left col -->
+
+    <!-- ── Right col: conversation ── -->
+    <div class="col-lg-8">
+        <div class="dc h-100">
+            <div class="dc-hd">
+                <i class="bi bi-chat-dots"></i>Conversation
+                <span style="font-weight:400;color:#9ca3af">({{ messages|length }})</span>
+            </div>
+            <div style="max-height:calc(100vh - 185px);min-height:240px;overflow-y:auto;padding:12px 14px">
+                {% if messages %}
+                    {% for msg in messages %}
+                    {% set role = msg.role or msg.get('sender', 'unknown') %}
+                    <div class="msg-{{ 'user' if role == 'user' or role == 'human' else 'claude' }} mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong style="font-size:12px">
+                                {% if role == 'user' or role == 'human' %}
+                                <i class="bi bi-person-fill me-1"></i>User
+                                {% else %}
+                                <i class="bi bi-robot me-1"></i>Claude
+                                {% endif %}
+                            </strong>
+                            <small class="text-muted">{{ (msg.created_at or msg.get('timestamp', ''))|format_dt }}</small>
+                        </div>
+                        <div class="msg-content" {% if 'view_chat_content' not in user_permissions %}style="filter:blur(4px);user-select:none" title="Content restricted for your role"{% endif %}>
+                            {% set content = msg.content if msg.content is defined else msg.get('text', '') %}
+                            {% if content is string %}
+                                <div style="white-space:pre-wrap">{{ content }}</div>
+                            {% elif content is iterable and content is not mapping %}
+                                {% for part in content %}
+                                    {% if part is mapping %}
+                                        {% if part.type == 'text' %}
+                                        <div style="white-space:pre-wrap">{{ part.text }}</div>
+                                        {% elif part.type == 'tool_use' %}
+                                        <div class="mt-1 p-2 rounded" style="background:#f0f0f0;font-size:0.82em">
+                                            <i class="bi bi-tools me-1"></i><strong>{{ part.name or 'Tool' }}</strong>
+                                            {% if part.input %}<pre class="mb-0 mt-1 mono" style="white-space:pre-wrap;font-size:0.9em">{{ part.input|tojson(indent=2) }}</pre>{% endif %}
+                                        </div>
+                                        {% elif part.type == 'tool_result' %}
+                                        <div class="mt-1 p-2 rounded" style="background:#e8f5e9;font-size:0.82em">
+                                            <i class="bi bi-check-circle me-1"></i>Tool Result
+                                            {% if part.content %}<pre class="mb-0 mt-1 mono" style="white-space:pre-wrap;font-size:0.9em">{{ part.content if part.content is string else part.content|tojson(indent=2) }}</pre>{% endif %}
+                                        </div>
+                                        {% else %}
+                                        <div style="white-space:pre-wrap">{{ part|tojson(indent=2) }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div style="white-space:pre-wrap">{{ part }}</div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% elif content is mapping %}
+                                <pre class="mb-0 mono" style="white-space:pre-wrap;font-size:0.9em">{{ content|tojson(indent=2) }}</pre>
+                            {% elif content %}
+                                <div style="white-space:pre-wrap">{{ content }}</div>
+                            {% else %}
+                                <span class="text-muted fst-italic">No content</span>
+                            {% endif %}
+                        </div>
+                        {% set files = msg.files or msg.get('attachments', []) %}
+                        {% if files %}
+                        <div class="mt-1">
+                            {% for f in files %}
+                            <div class="d-inline-flex align-items-center me-2 mb-1 px-2 py-1 rounded" style="background:#f8f8f8;border:1px solid #ddd;font-size:0.82em">
+                                <i class="bi bi-paperclip me-1"></i>
+                                {% set fid = f.id if f.id is defined else f.get('file_id', '') %}
+                                {% if fid %}
+                                <a href="{{ url_for('chats.download_file', file_id=fid) }}" class="text-decoration-none me-1">{{ f.filename or f.get('file_name', fid) }}</a>
+                                {% else %}
+                                <span class="me-1">{{ f.filename or f.get('file_name', 'Attachment') }}</span>
+                                {% endif %}
+                                <span class="text-muted">{{ f.mime_type or f.get('content_type', '') }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-chat-left-text fs-2 d-block mb-2"></i>
+                    <p class="mb-0 small">No messages found.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div><!-- /right col -->
+
+</div><!-- /row -->
+
+<!-- ── Raw JSON ── -->
+<div class="dc mt-3">
+    <div class="dc-hd" style="cursor:pointer" data-bs-toggle="collapse" data-bs-target="#rawJson">
+        <i class="bi bi-code-slash"></i>Raw JSON
+        <i class="bi bi-chevron-right ms-auto"></i>
+    </div>
+    <div class="collapse" id="rawJson">
+        <pre style="margin:0;padding:12px;font-size:11px;overflow-x:auto;max-height:300px;overflow-y:auto;background:#f8f9fa;color:#374151">{{ chat_json }}</pre>
+    </div>
+</div>
+
+<!-- ── Delete Modal ── -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Permanently delete this chat? Type the chat ID to confirm:</p>
+                <code class="d-block mb-2 small" id="deleteTargetId">{{ chat.id }}</code>
+                <input type="text" class="form-control form-control-sm" id="deleteConfirmInput" placeholder="Paste chat ID here">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('chats.delete', chat_id=chat.id) }}" id="deleteForm">
+                    <button type="submit" class="btn btn-sm btn-danger" id="deleteConfirmBtn" disabled>
+                        <i class="bi bi-trash me-1"></i>Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function esc(s) { var d = document.createElement('div'); d.textContent = String(s || ''); return d.innerHTML; }
+
+    // ── Delete confirm ──
+    var input = document.getElementById('deleteConfirmInput');
+    var btn = document.getElementById('deleteConfirmBtn');
+    var target = document.getElementById('deleteTargetId');
+    if (input && btn && target) {
+        input.addEventListener('input', function() {
+            btn.disabled = input.value.trim() !== target.textContent.trim();
+        });
+    }
+
+    // ── Org name resolution ──
+    var orgCell = document.getElementById('chatOrgCell');
+    var rawOrgId = '{{ chat.organization_id or "" }}';
+    if (orgCell && rawOrgId) {
+        fetch('{{ url_for("activities.api_org_names") }}')
+            .then(function(r) { return r.json(); })
+            .then(function(names) {
+                var name = names[rawOrgId];
+                if (name) {
+                    orgCell.classList.remove('mono');
+                    orgCell.innerHTML = '<strong style="font-size:12px">' + esc(name) + '</strong>'
+                        + '<br><span class="mono" style="font-size:10px;color:#9ca3af">' + esc(rawOrgId) + '</span>';
+                }
+            }).catch(function() {});
+    }
+
+    // ── Entra ID profile (merged into user card) ──
+    var userEmail = '{{ (chat.user.get("email_address", "") if chat.user else "") }}';
+    if (userEmail) {
+        fetch('/activities/api/user-profile/' + encodeURIComponent(userEmail))
+            .then(function(r) { return r.json(); })
+            .then(function(p) {
+                if (!p || !p.available) return;
+
+                // Update avatar
+                var photoEl = document.getElementById('chatUserPhotoEl');
+                if (photoEl && p.photo_data_uri) {
+                    photoEl.innerHTML = '<img src="' + p.photo_data_uri + '" alt="">';
+                }
+                // Update name
+                var nameEl = document.getElementById('chatUserNameEl');
+                if (nameEl && p.displayName) {
+                    nameEl.textContent = p.displayName;
+                }
+                // Update title/dept
+                var titleEl = document.getElementById('chatUserTitleEl');
+                if (titleEl) {
+                    var parts = [p.jobTitle, p.department].filter(Boolean);
+                    titleEl.textContent = parts.join(' · ');
+                }
+
+                // Append Entra-specific rows
+                var rows = document.getElementById('chatEntraRows');
+                if (!rows) return;
+                var h = '<table class="table dt mb-0">';
+                if (p.officeLocation) h += '<tr><td>Office</td><td>' + esc(p.officeLocation) + '</td></tr>';
+                var phones = [];
+                if (p.businessPhones && p.businessPhones.length) phones = phones.concat(p.businessPhones);
+                if (p.mobilePhone) phones.push(p.mobilePhone + ' (m)');
+                if (phones.length) h += '<tr><td>Phone</td><td>' + esc(phones.join(', ')) + '</td></tr>';
+                var addrParts = [];
+                if (p.streetAddress) addrParts.push(p.streetAddress);
+                var city = [p.city, p.state, p.postalCode].filter(Boolean).join(', ');
+                if (city) addrParts.push(city);
+                if (p.countryOrRegion) addrParts.push(p.countryOrRegion);
+                if (addrParts.length) h += '<tr><td>Address</td><td style="line-height:1.6">' + addrParts.map(esc).join('<br>') + '</td></tr>';
+                if (p.manager) {
+                    var m = p.manager;
+                    var mt = esc(m.displayName || '');
+                    if (m.jobTitle) mt += '<br><span style="font-size:11px;color:#6b7280">' + esc(m.jobTitle) + '</span>';
+                    if (m.mail) mt += '<br><a href="mailto:' + esc(m.mail) + '" style="font-size:11px">' + esc(m.mail) + '</a>';
+                    h += '<tr><td>Manager</td><td>' + mt + '</td></tr>';
+                }
+                var status = p.accountEnabled === false
+                    ? '<span class="badge bg-danger" style="font-size:10px">Disabled</span>'
+                    : '<span class="badge bg-success" style="font-size:10px">Active</span>';
+                h += '<tr><td>Status</td><td>' + status + '</td></tr>';
+                h += '</table>';
+                rows.innerHTML = h;
+            }).catch(function() {});
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}Sync Control - Claude Compliance{% endblock %}
+{% block page_title %}Sync Control{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Scheduler Status -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-clock me-2"></i>Scheduler</div>
+            <div class="card-body">
+                {% if scheduler_status.running %}
+                <p><span class="badge bg-success">Running</span></p>
+                {% if scheduler_status.next_run %}
+                <p class="mb-0"><small class="text-muted">Next run:</small><br>{{ scheduler_status.next_run }}</p>
+                {% endif %}
+                {% else %}
+                <p><span class="badge bg-secondary">Stopped</span></p>
+                <p class="text-muted mb-0 small">Enable sync in <a href="{{ url_for('settings.index') }}">Settings</a>.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Last Sync Result -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-check-circle me-2"></i>Last Sync</div>
+            <div class="card-body" id="lastResult">
+                {% if last_result %}
+                <table class="table table-sm mb-0">
+                    <tr><td class="fw-bold">Chats Synced</td><td>{{ last_result.chats_synced }}</td></tr>
+                    <tr><td class="fw-bold">Completed</td><td>{{ last_result.completed_at }}</td></tr>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0">No sync has run yet this session.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Trigger -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-play-circle me-2"></i>Manual Sync</div>
+            <div class="card-body text-center">
+                <p class="text-muted small">Sync chat conversations and attachments to Exchange mailbox.</p>
+                {% if sync_running %}
+                <button id="stopBtn" class="btn btn-danger">
+                    <i class="bi bi-stop-circle me-1"></i>
+                    <span id="stopLabel">Stop Sync</span>
+                </button>
+                <div id="syncSpinner" class="mt-2">
+                    <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+                    <small class="text-muted ms-1">Sync in progress...</small>
+                </div>
+                <button id="triggerBtn" class="btn btn-primary d-none">
+                    <i class="bi bi-arrow-repeat me-1"></i>
+                    <span id="triggerLabel">Run Sync Now</span>
+                </button>
+                {% else %}
+                <button id="triggerBtn" class="btn btn-primary">
+                    <i class="bi bi-arrow-repeat me-1"></i>
+                    <span id="triggerLabel">Run Sync Now</span>
+                </button>
+                <button id="stopBtn" class="btn btn-danger d-none">
+                    <i class="bi bi-stop-circle me-1"></i>
+                    <span id="stopLabel">Stop Sync</span>
+                </button>
+                <div id="syncSpinner" class="mt-2 d-none">
+                    <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+                    <small class="text-muted ms-1">Sync in progress...</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Viewer -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-terminal me-2"></i>Sync Log</span>
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+                    <label class="form-check-label small" for="autoRefresh">Auto-refresh</label>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="syncLog" class="sync-log" style="height:400px;overflow-y:auto;font-family:monospace;font-size:0.85em;padding:12px">
+                    {% for entry in logs %}
+                    <div class="log-entry log-{{ entry.level|lower }}">
+                        <span class="text-muted">{{ entry.time }}</span>
+                        <span class="badge bg-{{ 'danger' if entry.level == 'ERROR' else ('warning' if entry.level == 'WARNING' else 'info') }} badge-sm">{{ entry.level }}</span>
+                        {{ entry.message }}
+                    </div>
+                    {% endfor %}
+                    {% if not logs %}
+                    <p class="text-muted mb-0">No log entries yet. Run a sync to see output.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var triggerBtn = document.getElementById('triggerBtn');
+    var triggerLabel = document.getElementById('triggerLabel');
+    var stopBtn = document.getElementById('stopBtn');
+    var stopLabel = document.getElementById('stopLabel');
+    var spinner = document.getElementById('syncSpinner');
+    var logDiv = document.getElementById('syncLog');
+    var autoRefresh = document.getElementById('autoRefresh');
+    var refreshInterval = null;
+
+    function showRunning() {
+        triggerBtn.classList.add('d-none');
+        stopBtn.classList.remove('d-none');
+        stopBtn.disabled = false;
+        stopLabel.textContent = 'Stop Sync';
+        spinner.classList.remove('d-none');
+    }
+
+    function showIdle() {
+        stopBtn.classList.add('d-none');
+        triggerBtn.classList.remove('d-none');
+        triggerBtn.disabled = false;
+        triggerLabel.textContent = 'Run Sync Now';
+        spinner.classList.add('d-none');
+    }
+
+    // Trigger sync
+    if (triggerBtn) {
+        triggerBtn.addEventListener('click', function() {
+            triggerBtn.disabled = true;
+
+            fetch('{{ url_for("sync.trigger") }}', {method: 'POST'})
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.error) {
+                        alert(data.error);
+                        showIdle();
+                    } else {
+                        showRunning();
+                    }
+                })
+                .catch(function(err) {
+                    alert('Request failed: ' + err);
+                    showIdle();
+                });
+        });
+    }
+
+    // Stop sync
+    if (stopBtn) {
+        stopBtn.addEventListener('click', function() {
+            stopBtn.disabled = true;
+            stopLabel.textContent = 'Stopping...';
+
+            fetch('{{ url_for("sync.stop") }}', {method: 'POST'})
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.error) {
+                        alert(data.error);
+                        stopBtn.disabled = false;
+                        stopLabel.textContent = 'Stop Sync';
+                    }
+                    // Button will switch back to "Run Sync Now" when polling detects sync stopped
+                })
+                .catch(function(err) {
+                    alert('Stop request failed: ' + err);
+                    stopBtn.disabled = false;
+                    stopLabel.textContent = 'Stop Sync';
+                });
+        });
+    }
+
+    // Poll log
+    function refreshLog() {
+        fetch('{{ url_for("sync.log") }}')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Update log
+                if (data.entries && data.entries.length > 0) {
+                    var html = '';
+                    data.entries.forEach(function(e) {
+                        var badge = e.level === 'ERROR' ? 'danger' : (e.level === 'WARNING' ? 'warning' : 'info');
+                        html += '<div class="log-entry log-' + e.level.toLowerCase() + '">'
+                            + '<span class="text-muted">' + e.time + '</span> '
+                            + '<span class="badge bg-' + badge + ' badge-sm">' + e.level + '</span> '
+                            + e.message + '</div>';
+                    });
+                    logDiv.innerHTML = html;
+                    logDiv.scrollTop = logDiv.scrollHeight;
+                }
+
+                // Update button state based on running status
+                if (data.running) {
+                    showRunning();
+                } else {
+                    showIdle();
+                }
+
+                // Update last result
+                if (data.last_result) {
+                    var lr = data.last_result;
+                    var statusRow = lr.cancelled
+                        ? '<tr><td class="fw-bold">Status</td><td><span class="badge bg-warning">Cancelled</span></td></tr>'
+                        : '';
+                    document.getElementById('lastResult').innerHTML =
+                        '<table class="table table-sm mb-0">'
+                        + '<tr><td class="fw-bold">Chats Synced</td><td>' + lr.chats_synced + '</td></tr>'
+                        + '<tr><td class="fw-bold">Completed</td><td>' + lr.completed_at + '</td></tr>'
+                        + statusRow
+                        + '</table>';
+                }
+            })
+            .catch(function() {});
+    }
+
+    function startPolling() {
+        if (refreshInterval) return;
+        refreshInterval = setInterval(refreshLog, 3000);
+    }
+
+    function stopPolling() {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+    }
+
+    autoRefresh.addEventListener('change', function() {
+        if (this.checked) startPolling();
+        else stopPolling();
+    });
+
+    if (autoRefresh.checked) startPolling();
+});
+</script>
+{% endblock %}

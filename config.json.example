@@ -1,0 +1,23 @@
+{
+  "anthropic_base_url": "https://api.anthropic.com",
+  "graph_tenant_id": "",
+  "graph_client_id": "",
+  "graph_client_secret": "",
+  "compliance_mailbox": "",
+  "compliance_folder_name": "Anthropic Claude Archive",
+  "activity_batch_size": 500,
+  "chat_batch_size": 100,
+  "ingest_chat_content": true,
+  "sync_schedule_cron": "*/15 * * * *",
+  "sync_enabled": false,
+  "display_timezone": "UTC",
+  "brand_app_name": "Claude Compliance",
+  "brand_sidebar_color": "#1a1a2e",
+  "brand_accent_color": "#6b21a8",
+  "brand_logo_filename": "",
+  "credential_storage": "local",
+  "keyvault_url": "",
+  "keyvault_secret_anthropic_key": "AnthropicComplianceKey",
+  "keyvault_secret_graph_secret": "GraphClientSecret",
+  "keyvault_secret_storage_conn": "AzureStorage"
+}

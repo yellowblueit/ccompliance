@@ -1,0 +1,475 @@
+{% extends "base.html" %}
+{% block title %}Chats - Claude Compliance{% endblock %}
+{% block page_title %}Chats{% endblock %}
+
+{% block content %}
+<!-- Filter Bar -->
+<div class="filter-bar" id="filterBar">
+    <form method="GET" action="{{ url_for('chats.index') }}" id="filterForm">
+        <div class="row g-3 align-items-end">
+            <!-- User dropdown -->
+            <div class="col-md-3">
+                <label>User(s)</label>
+                <div class="dropdown w-100">
+                    <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
+                            type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="userDropdownBtn">
+                        <span id="userDropdownLabel">
+                            {% if filters.get('user_ids') %}
+                                {{ filters.user_ids|length }} user(s) selected
+                            {% else %}
+                                All users
+                            {% endif %}
+                        </span>
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu p-3 shadow" style="width:380px;max-height:360px;overflow-y:auto">
+                        <div class="mb-2">
+                            <input type="text" class="form-control form-control-sm" placeholder="Search users..."
+                                   id="userSearchInput">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="small text-uppercase text-muted">Users</strong>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-link p-0 me-2" data-action="select-all" data-group="user">Select All</button>
+                                <button type="button" class="btn btn-sm btn-link p-0" data-action="clear-all" data-group="user">Clear</button>
+                            </div>
+                        </div>
+                        {% for u in all_users %}
+                        <div class="form-check form-check-sm user-check-item">
+                            <input class="form-check-input group-checkbox" type="checkbox"
+                                   name="user_ids" value="{{ u.id }}" id="user_{{ loop.index }}"
+                                   data-group="user"
+                                   {{ 'checked' if u.id in (filters.get('user_ids') or []) }}>
+                            <label class="form-check-label" for="user_{{ loop.index }}" style="font-size:12px">
+                                {{ u.email or u.name or u.id }}
+                                {% if u.email and u.name %}<span class="text-muted"> ({{ u.name }})</span>{% endif %}
+                            </label>
+                        </div>
+                        {% endfor %}
+                        {% if not all_users %}
+                        <div class="text-muted small">No users found</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Organization dropdown -->
+            <div class="col-md-3">
+                <label>Organization(s)</label>
+                <div class="dropdown w-100">
+                    <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
+                            type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="orgDropdownBtn">
+                        <span id="orgDropdownLabel">
+                            {% if filters.get('organization_ids') %}
+                                {{ filters.organization_ids|length }} org(s) selected
+                            {% else %}
+                                All organizations
+                            {% endif %}
+                        </span>
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu p-3 shadow" style="width:380px;max-height:360px;overflow-y:auto">
+                        <div class="mb-2">
+                            <input type="text" class="form-control form-control-sm" placeholder="Search orgs..."
+                                   id="orgSearchInput">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="small text-uppercase text-muted">Organizations</strong>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-link p-0 me-2" data-action="select-all" data-group="org">Select All</button>
+                                <button type="button" class="btn btn-sm btn-link p-0" data-action="clear-all" data-group="org">Clear</button>
+                            </div>
+                        </div>
+                        {% for o in all_orgs %}
+                        <div class="form-check form-check-sm org-check-item">
+                            <input class="form-check-input group-checkbox" type="checkbox"
+                                   name="organization_ids" value="{{ o.id }}" id="org_{{ loop.index }}"
+                                   data-group="org"
+                                   {{ 'checked' if o.id in (filters.get('organization_ids') or []) }}>
+                            <label class="form-check-label" for="org_{{ loop.index }}" style="font-size:12px">
+                                {{ o.name or o.id }}
+                                {% if o.name %}<span class="text-muted mono"> ({{ o.id[:16] }}...)</span>{% endif %}
+                            </label>
+                        </div>
+                        {% endfor %}
+                        {% if not all_orgs %}
+                        <div class="text-muted small">No organizations found</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project dropdown (loaded via AJAX) -->
+            <div class="col-md-3">
+                <label>Project(s)</label>
+                <div class="dropdown w-100">
+                    <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
+                            type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="projDropdownBtn">
+                        <span id="projDropdownLabel">
+                            {% if filters.get('project_ids') %}
+                                {{ filters.project_ids|length }} project(s) selected
+                            {% else %}
+                                All projects
+                            {% endif %}
+                        </span>
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <div class="dropdown-menu p-3 shadow" style="width:380px;max-height:360px;overflow-y:auto">
+                        <div class="mb-2">
+                            <input type="text" class="form-control form-control-sm" placeholder="Search projects..."
+                                   id="projSearchInput">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="small text-uppercase text-muted">Projects</strong>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-link p-0 me-2" data-action="select-all" data-group="proj">Select All</button>
+                                <button type="button" class="btn btn-sm btn-link p-0" data-action="clear-all" data-group="proj">Clear</button>
+                            </div>
+                        </div>
+                        <div id="projCheckboxList">
+                            <div class="text-center py-2">
+                                <div class="spinner-border spinner-border-sm text-muted" role="status"></div>
+                                <span class="text-muted small ms-1">Loading projects...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Limit -->
+            <div class="col-md-1">
+                <label>Limit</label>
+                <select class="form-select" name="limit">
+                    {% for v in [25, 50, 100, 250, 500] %}
+                    <option value="{{ v }}" {{ "selected" if filters.get('limit', '50')|string == v|string }}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Date filters (collapsed) -->
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill"><i class="bi bi-search me-1"></i>Search</button>
+                <a href="{{ url_for('chats.index') }}" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></a>
+            </div>
+        </div>
+
+        <!-- Collapsible date row -->
+        <div class="mt-2">
+            <a data-bs-toggle="collapse" href="#dateFilters" role="button" class="small text-muted text-decoration-none">
+                <i class="bi bi-calendar3 me-1"></i>Date filters
+                {% if filters.get('created_at_gte') or filters.get('created_at_lte') or filters.get('updated_at_gte') or filters.get('updated_at_lte') %}
+                <span class="badge bg-primary ms-1">active</span>
+                {% endif %}
+            </a>
+            <div class="collapse {{ 'show' if filters.get('created_at_gte') or filters.get('created_at_lte') or filters.get('updated_at_gte') or filters.get('updated_at_lte') }}" id="dateFilters">
+                <div class="row g-3 mt-1">
+                    <div class="col-md-3">
+                        <label class="small">Created From ({{ tz_abbr }})</label>
+                        <input type="datetime-local" class="form-control form-control-sm" name="created_at_gte"
+                               value="{{ filters.get('created_at_gte', '') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="small">Created To ({{ tz_abbr }})</label>
+                        <input type="datetime-local" class="form-control form-control-sm" name="created_at_lte"
+                               value="{{ filters.get('created_at_lte', '') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="small">Updated From ({{ tz_abbr }})</label>
+                        <input type="datetime-local" class="form-control form-control-sm" name="updated_at_gte"
+                               value="{{ filters.get('updated_at_gte', '') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="small">Updated To ({{ tz_abbr }})</label>
+                        <input type="datetime-local" class="form-control form-control-sm" name="updated_at_lte"
+                               value="{{ filters.get('updated_at_lte', '') }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if chats %}
+<!-- Keyword search bar -->
+<div class="d-flex align-items-center gap-2 mb-2">
+    <div class="input-group input-group-sm" style="max-width:360px">
+        <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" class="form-control" id="chatKeywordInput" placeholder="Filter results by keyword...">
+        <button class="btn btn-outline-secondary" id="chatKeywordClear" type="button" title="Clear filter"><i class="bi bi-x"></i></button>
+    </div>
+    <span class="text-muted small" id="chatKeywordCount">{{ chats|length }} result{{ 's' if chats|length != 1 }}</span>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="chatsTable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>User</th>
+                    <th>Organization</th>
+                    <th>Project</th>
+                    <th>Created</th>
+                    <th>Updated</th>
+                    <th>ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in chats %}
+                <tr onclick="window.location='{{ url_for('chats.detail', chat_id=c.id) }}?data={{ c|tojson|urlencode }}'">
+                    <td class="fw-bold" data-sort="{{ c.name or '' }}">{{ c.name or 'Untitled' }}</td>
+                    <td data-sort="{{ c.user.get('email_address', '') if c.user else '' }}">
+                        {% if c.user %}
+                            {{ c.user.get('email_address', '') }}
+                        {% endif %}
+                    </td>
+                    <td class="org-name-cell mono" data-org-id="{{ c.organization_id or '' }}" data-sort="{{ c.organization_id or '' }}">
+                        <span class="mono small">{{ (c.organization_id or '')[:16] }}{% if c.organization_id %}...{% endif %}</span>
+                    </td>
+                    <td class="mono" data-sort="{{ c.project_id or '' }}">{{ c.project_id or '' }}</td>
+                    <td class="text-nowrap" data-sort="{{ c.created_at or '' }}">{{ c.created_at|format_dt }}</td>
+                    <td class="text-nowrap" data-sort="{{ c.updated_at or '' }}">{{ c.updated_at|format_dt }}</td>
+                    <td class="mono" data-sort="{{ c.id }}">{{ c.id[:20] }}...</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <span class="text-muted small">{{ chats|length }} result(s)</span>
+    <div class="d-flex gap-2" id="paginationLinks"></div>
+</div>
+{% elif not error %}
+<div class="empty-state">
+    <i class="bi bi-chat-dots d-block"></i>
+    <h5>No chats found</h5>
+    <p>Adjust your filters or date range to find chats.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var form = document.getElementById('filterForm');
+    var selectedProjectIds = {{ (filters.get('project_ids') or [])|tojson }};
+
+    // ── TableManager ─────────────────────────────────────────
+    var chatsTableEl = document.getElementById('chatsTable');
+    if (chatsTableEl) {
+        new TableManager(chatsTableEl, {
+            id: 'chats',
+            columns: [
+                { key: 'name', label: 'Name' },
+                { key: 'user', label: 'User' },
+                { key: 'organization', label: 'Organization' },
+                { key: 'project', label: 'Project' },
+                { key: 'created', label: 'Created', type: 'date' },
+                { key: 'updated', label: 'Updated', type: 'date' },
+                { key: 'id', label: 'ID' },
+            ],
+            defaultSort: { key: 'updated', dir: 'desc' },
+        });
+    }
+
+    // ── Dropdown label updaters ──────────────────────────────
+    function updateDropdownLabel(group, labelId, allText) {
+        var checked = document.querySelectorAll('.group-checkbox[data-group="' + group + '"]:checked');
+        var labelEl = document.getElementById(labelId);
+        if (!labelEl) return;
+        if (checked.length === 0) {
+            labelEl.textContent = allText;
+        } else if (checked.length === 1) {
+            var lbl = checked[0].closest('.form-check').querySelector('.form-check-label');
+            labelEl.textContent = lbl ? lbl.textContent.trim().substring(0, 40) : '1 selected';
+        } else {
+            labelEl.textContent = checked.length + ' selected';
+        }
+    }
+
+    // Bind change events for user and org checkboxes
+    document.querySelectorAll('.group-checkbox[data-group="user"]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            updateDropdownLabel('user', 'userDropdownLabel', 'All users');
+        });
+    });
+    document.querySelectorAll('.group-checkbox[data-group="org"]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            updateDropdownLabel('org', 'orgDropdownLabel', 'All organizations');
+        });
+    });
+
+    // ── Select All / Clear buttons ───────────────────────────
+    document.querySelectorAll('[data-action="select-all"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var group = this.dataset.group;
+            document.querySelectorAll('.group-checkbox[data-group="' + group + '"]').forEach(function(cb) {
+                if (!cb.closest('.form-check').classList.contains('d-none')) cb.checked = true;
+            });
+            updateAllLabels();
+        });
+    });
+    document.querySelectorAll('[data-action="clear-all"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var group = this.dataset.group;
+            document.querySelectorAll('.group-checkbox[data-group="' + group + '"]').forEach(function(cb) {
+                cb.checked = false;
+            });
+            updateAllLabels();
+        });
+    });
+
+    function updateAllLabels() {
+        updateDropdownLabel('user', 'userDropdownLabel', 'All users');
+        updateDropdownLabel('org', 'orgDropdownLabel', 'All organizations');
+        updateDropdownLabel('proj', 'projDropdownLabel', 'All projects');
+    }
+
+    // ── Search filtering within dropdowns ────────────────────
+    function setupSearch(inputId, itemSelector) {
+        var input = document.getElementById(inputId);
+        if (!input) return;
+        input.addEventListener('input', function() {
+            var q = this.value.toLowerCase();
+            document.querySelectorAll(itemSelector).forEach(function(item) {
+                var text = item.textContent.toLowerCase();
+                item.classList.toggle('d-none', q && text.indexOf(q) === -1);
+            });
+        });
+    }
+    setupSearch('userSearchInput', '.user-check-item');
+    setupSearch('orgSearchInput', '.org-check-item');
+    setupSearch('projSearchInput', '.proj-check-item');
+
+    // ── Load projects via AJAX ───────────────────────────────
+    fetch('{{ url_for("chats.api_projects") }}')
+        .then(function(r) { return r.json(); })
+        .then(function(projects) {
+            var container = document.getElementById('projCheckboxList');
+            if (!projects.length) {
+                container.innerHTML = '<div class="text-muted small">No projects found</div>';
+                return;
+            }
+            var html = '';
+            projects.forEach(function(p, idx) {
+                var checked = selectedProjectIds.indexOf(p.id) !== -1 ? ' checked' : '';
+                html += '<div class="form-check form-check-sm proj-check-item">';
+                html += '<input class="form-check-input group-checkbox" type="checkbox" name="project_ids" value="' + p.id + '" id="proj_' + idx + '" data-group="proj"' + checked + '>';
+                html += '<label class="form-check-label" for="proj_' + idx + '" style="font-size:12px">' + (p.name || p.id) + '</label>';
+                html += '</div>';
+            });
+            container.innerHTML = html;
+
+            // Bind change events on newly created checkboxes
+            container.querySelectorAll('.group-checkbox').forEach(function(cb) {
+                cb.addEventListener('change', function() {
+                    updateDropdownLabel('proj', 'projDropdownLabel', 'All projects');
+                });
+            });
+            updateDropdownLabel('proj', 'projDropdownLabel', 'All projects');
+        })
+        .catch(function() {
+            document.getElementById('projCheckboxList').innerHTML =
+                '<div class="text-muted small">Failed to load projects</div>';
+        });
+
+    // ── Keyword row filter ────────────────────────────────────
+    (function() {
+        var kwInput = document.getElementById('chatKeywordInput');
+        var kwClear = document.getElementById('chatKeywordClear');
+        var kwCount = document.getElementById('chatKeywordCount');
+        var tableEl = document.getElementById('chatsTable');
+        if (!kwInput || !tableEl) return;
+
+        var allRows = Array.from(tableEl.querySelectorAll('tbody tr'));
+        var total = allRows.length;
+
+        function filterChatRows() {
+            var q = kwInput.value.trim().toLowerCase();
+            var shown = 0;
+            allRows.forEach(function(row) {
+                var match = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+                row.style.display = match ? '' : 'none';
+                if (match) shown++;
+            });
+            if (kwCount) {
+                if (q) {
+                    kwCount.textContent = shown + ' of ' + total + ' match' + (shown === 1 ? '' : 'es');
+                } else {
+                    kwCount.textContent = total + ' result' + (total === 1 ? '' : 's');
+                }
+            }
+        }
+
+        kwInput.addEventListener('input', filterChatRows);
+        if (kwClear) {
+            kwClear.addEventListener('click', function() {
+                kwInput.value = '';
+                filterChatRows();
+            });
+        }
+    })();
+
+    // ── Pagination with preserved filters ────────────────────
+    var paginationEl = document.getElementById('paginationLinks');
+    if (paginationEl) {
+        var hasMore = {{ 'true' if has_more else 'false' }};
+        var lastId = {{ last_id|tojson if last_id else 'null' }};
+        var firstId = {{ first_id|tojson if first_id else 'null' }};
+        var currentAfter = '{{ filters.get("after_id", "") }}';
+
+        function buildPageUrl(extraParams) {
+            var p = new URLSearchParams();
+            // Gather all form values
+            form.querySelectorAll('input[type="datetime-local"], select[name="limit"]').forEach(function(el) {
+                if (el.name && el.value) p.set(el.name, el.value);
+            });
+            // Gather checked checkboxes (multi-value)
+            form.querySelectorAll('.group-checkbox:checked').forEach(function(cb) {
+                p.append(cb.name, cb.value);
+            });
+            // Add extra params (pagination)
+            for (var k in extraParams) {
+                if (extraParams[k]) p.set(k, extraParams[k]);
+            }
+            return '{{ url_for("chats.index") }}?' + p.toString();
+        }
+
+        var ph = '';
+        if (currentAfter && firstId) {
+            ph += '<a href="' + buildPageUrl({before_id: firstId}) + '" class="btn btn-sm btn-outline-primary">';
+            ph += '<i class="bi bi-chevron-left me-1"></i>Previous</a>';
+        }
+        if (hasMore && lastId) {
+            ph += '<a href="' + buildPageUrl({after_id: lastId}) + '" class="btn btn-sm btn-outline-primary">';
+            ph += 'Next<i class="bi bi-chevron-right ms-1"></i></a>';
+        }
+        paginationEl.innerHTML = ph;
+    }
+
+    // ── Resolve org IDs to names ──────────────────────────────
+    var orgCells = document.querySelectorAll('.org-name-cell');
+    if (orgCells.length > 0) {
+        fetch('{{ url_for("activities.api_org_names") }}')
+            .then(function(r) { return r.json(); })
+            .then(function(names) {
+                orgCells.forEach(function(cell) {
+                    var oid = cell.dataset.orgId;
+                    if (oid && names[oid]) {
+                        cell.innerHTML = '<span title="' + oid + '">' + names[oid] + '</span>';
+                        cell.dataset.sort = names[oid];
+                    }
+                });
+            })
+            .catch(function() { /* keep raw IDs on failure */ });
+    }
+});
+</script>
+{% endblock %}

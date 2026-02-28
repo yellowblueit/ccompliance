@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Projects - Claude Compliance{% endblock %}
+{% block page_title %}Projects{% endblock %}
+
+{% block content %}
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <form method="GET" action="{{ url_for('projects.index') }}">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label>Created From ({{ tz_abbr }})</label>
+                <input type="datetime-local" class="form-control" name="created_at_gte"
+                       value="{{ filters.get('created_at_gte', '') }}">
+            </div>
+            <div class="col-md-3">
+                <label>Created To ({{ tz_abbr }})</label>
+                <input type="datetime-local" class="form-control" name="created_at_lte"
+                       value="{{ filters.get('created_at_lte', '') }}">
+            </div>
+            <div class="col-md-3">
+                <label>Organization ID(s)</label>
+                <input type="text" class="form-control" name="organization_ids"
+                       value="{{ filters.get('organization_ids', '') }}" placeholder="org_abc">
+            </div>
+            <div class="col-md-3">
+                <label>User ID(s)</label>
+                <input type="text" class="form-control" name="user_ids"
+                       value="{{ filters.get('user_ids', '') }}" placeholder="user_abc123">
+            </div>
+            <div class="col-md-2">
+                <label>Limit</label>
+                <select class="form-select" name="limit">
+                    {% for v in [25, 50, 100, 250, 500] %}
+                    <option value="{{ v }}" {{ "selected" if filters.get('limit', '50')|string == v|string }}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Search</button>
+            </div>
+            <div class="col-md-2">
+                <a href="{{ url_for('projects.index') }}" class="btn btn-outline-secondary w-100">Clear</a>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if projects %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="projectsTable">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Creator</th>
+                    <th>Organization</th>
+                    <th>Visibility</th>
+                    <th>Created</th>
+                    <th>ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in projects %}
+                <tr onclick="window.location='{{ url_for('projects.detail', project_id=p.id) }}'">
+                    <td class="fw-bold" data-sort="{{ p.name or '' }}">{{ p.name or 'Untitled' }}</td>
+                    <td data-sort="{{ p.creator.get('email_address', '') if p.creator else '' }}">
+                        {% if p.creator %}
+                            {{ p.creator.get('email_address', '') }}
+                        {% endif %}
+                    </td>
+                    <td class="mono" data-sort="{{ p.organization_id or '' }}">{{ p.organization_id or '' }}</td>
+                    <td data-sort="{{ p.visibility or '' }}">
+                        {% if p.visibility == 'public' %}
+                        <span class="badge bg-success">{{ p.visibility }}</span>
+                        {% elif p.visibility %}
+                        <span class="badge bg-secondary">{{ p.visibility }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-nowrap" data-sort="{{ p.created_at or '' }}">{{ p.created_at|format_dt }}</td>
+                    <td class="mono" data-sort="{{ p.id }}">{{ p.id[:20] }}...</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <span class="text-muted small">{{ projects|length }} result(s)</span>
+    <div class="d-flex gap-2">
+        {% if filters.get('after_id') and first_id %}
+        <a href="{{ url_for('projects.index', before_id=first_id, organization_ids=filters.get('organization_ids',''), user_ids=filters.get('user_ids',''), created_at_gte=filters.get('created_at_gte',''), created_at_lte=filters.get('created_at_lte',''), limit=filters.get('limit','50')) }}"
+           class="btn btn-sm btn-outline-primary"><i class="bi bi-chevron-left me-1"></i>Previous</a>
+        {% endif %}
+        {% if has_more and last_id %}
+        <a href="{{ url_for('projects.index', after_id=last_id, organization_ids=filters.get('organization_ids',''), user_ids=filters.get('user_ids',''), created_at_gte=filters.get('created_at_gte',''), created_at_lte=filters.get('created_at_lte',''), limit=filters.get('limit','50')) }}"
+           class="btn btn-sm btn-outline-primary">Next<i class="bi bi-chevron-right ms-1"></i></a>
+        {% endif %}
+    </div>
+</div>
+{% elif not error %}
+<div class="empty-state">
+    <i class="bi bi-folder d-block"></i>
+    <h5>No projects found</h5>
+    <p>Adjust your filters or date range to find projects.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var table = document.getElementById('projectsTable');
+    if (table) {
+        new TableManager(table, {
+            id: 'projects',
+            columns: [
+                { key: 'name', label: 'Name' },
+                { key: 'creator', label: 'Creator' },
+                { key: 'organization', label: 'Organization' },
+                { key: 'visibility', label: 'Visibility' },
+                { key: 'created', label: 'Created', type: 'date' },
+                { key: 'id', label: 'ID' },
+            ],
+            defaultSort: { key: 'created', dir: 'desc' },
+        });
+    }
+});
+</script>
+{% endblock %}

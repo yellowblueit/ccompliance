@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Users – {{ org_uuid }} - Claude Compliance{% endblock %}
+{% block page_title %}Organization Users{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('organizations.index') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Organizations
+    </a>
+    <span class="ms-3 text-muted">Organization: <code>{{ org_uuid }}</code></span>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if users %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="usersTable">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Name</th>
+                    <th>User ID</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th>Added</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td data-sort="{{ u.email or u.get('email_address', '') }}">{{ u.email or u.get('email_address', 'N/A') }}</td>
+                    <td data-sort="{{ u.name or '' }}">{{ u.name or '' }}</td>
+                    <td class="mono" data-sort="{{ u.user_id or u.id or '' }}">{{ u.user_id or u.id or '' }}</td>
+                    <td data-sort="{{ u.role or '' }}"><span class="badge bg-secondary">{{ u.role or 'N/A' }}</span></td>
+                    <td data-sort="{{ u.status or u.membership_status or 'active' }}">
+                        {% set user_status = u.status or u.membership_status or 'active' %}
+                        {% if user_status == 'active' %}
+                        <span class="badge bg-success">{{ user_status }}</span>
+                        {% elif user_status == 'deactivated' %}
+                        <span class="badge bg-danger">{{ user_status }}</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">{{ user_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-nowrap" data-sort="{{ u.created_at or '' }}">{{ u.created_at|format_dt }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <span class="text-muted small">{{ users|length }} user(s) on this page</span>
+    <div class="d-flex gap-2">
+        {% if filters.get('after_id') and first_id %}
+        <a href="{{ url_for('organizations.users', org_uuid=org_uuid, before_id=first_id, limit=limit) }}"
+           class="btn btn-sm btn-outline-primary"><i class="bi bi-chevron-left me-1"></i>Previous</a>
+        {% endif %}
+        {% if has_more and last_id %}
+        <a href="{{ url_for('organizations.users', org_uuid=org_uuid, after_id=last_id, limit=limit) }}"
+           class="btn btn-sm btn-outline-primary">Next<i class="bi bi-chevron-right ms-1"></i></a>
+        {% endif %}
+    </div>
+</div>
+{% elif not error %}
+<div class="empty-state">
+    <i class="bi bi-people d-block"></i>
+    <h5>No users found</h5>
+    <p>This organization has no users, or the API returned an empty result.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var table = document.getElementById('usersTable');
+    if (table) {
+        new TableManager(table, {
+            id: 'org-users',
+            columns: [
+                { key: 'email', label: 'Email' },
+                { key: 'name', label: 'Name' },
+                { key: 'user_id', label: 'User ID' },
+                { key: 'role', label: 'Role' },
+                { key: 'status', label: 'Status' },
+                { key: 'added', label: 'Added', type: 'date' },
+            ],
+            defaultSort: { key: 'added', dir: 'desc' },
+        });
+    }
+});
+</script>
+{% endblock %}

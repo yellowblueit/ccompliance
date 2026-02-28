@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Claude Compliance{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/custom.css') }}" rel="stylesheet">
+    <style>
+        :root {
+            --anthropic-dark: {{ brand.sidebar_color }};
+            --anthropic-purple: {{ brand.accent_color }};
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <nav class="sidebar d-flex flex-column" style="width:250px;min-height:100vh">
+            <div class="p-3 pb-1">
+                <h5 class="text-white mb-0 d-flex align-items-center gap-2">
+                    {% if brand.logo_filename %}
+                    <img src="{{ url_for('static', filename='uploads/' + brand.logo_filename) }}" alt=""
+                         style="height:22px;max-width:100px">
+                    {% else %}
+                    <i class="bi bi-shield-check"></i>
+                    {% endif %}
+                    {{ brand.app_name }}
+                </h5>
+                <small class="text-muted">API Explorer &amp; Sync</small>
+            </div>
+            <hr class="text-secondary mx-3 my-2">
+            <ul class="nav flex-column px-2 flex-grow-1">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/dashboard' %}active{% endif %}" href="{{ url_for('dashboard.index') }}">
+                        <i class="bi bi-speedometer2 me-2"></i>Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if '/activities' in request.path %}active{% endif %}" href="{{ url_for('activities.index') }}">
+                        <i class="bi bi-activity me-2"></i>Activity Feed
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if '/organizations' in request.path %}active{% endif %}" href="{{ url_for('organizations.index') }}">
+                        <i class="bi bi-building me-2"></i>Organizations
+                    </a>
+                </li>
+                {% if 'view_chats' in user_permissions %}
+                <li class="nav-item">
+                    <a class="nav-link {% if '/chats' in request.path %}active{% endif %}" href="{{ url_for('chats.index') }}">
+                        <i class="bi bi-chat-dots me-2"></i>Chats
+                    </a>
+                </li>
+                {% endif %}
+                <li class="nav-item">
+                    <a class="nav-link {% if '/projects' in request.path %}active{% endif %}" href="{{ url_for('projects.index') }}">
+                        <i class="bi bi-folder me-2"></i>Projects
+                    </a>
+                </li>
+                <li><hr class="text-secondary mx-1 my-2"></li>
+                <li class="nav-item">
+                    <a class="nav-link {% if '/sync' in request.path %}active{% endif %}" href="{{ url_for('sync.index') }}">
+                        <i class="bi bi-arrow-repeat me-2"></i>Sync Control
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if '/settings' in request.path %}active{% endif %}" href="{{ url_for('settings.index') }}">
+                        <i class="bi bi-gear me-2"></i>Settings
+                    </a>
+                </li>
+            </ul>
+            <div class="px-3 pb-3">
+                <small class="text-muted">Anthropic Compliance API<br>Rev E &middot; 2026-02-08</small>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="flex-grow-1 d-flex flex-column" style="min-height:100vh;min-width:0">
+            <!-- Top Bar -->
+            <div class="topbar bg-white border-bottom px-4 py-2 d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 text-muted">{% block page_title %}{% endblock %}</h6>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="text-muted small">
+                        <i class="bi bi-person-circle me-1"></i>{{ session.get('user', {}).get('name', 'User') }}
+                        {% if session.get('user', {}).get('role_name') %}
+                        <span class="badge bg-secondary ms-1" style="font-size:.7rem">{{ session.get('user', {}).get('role_name') }}</span>
+                        {% endif %}
+                    </span>
+                    {% if session.get('user') %}
+                    <a href="{{ url_for('auth_local.logout') }}" class="btn btn-sm btn-outline-secondary">Sign Out</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Flash Messages -->
+            <div class="px-4 pt-3">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                {% endwith %}
+            </div>
+
+            <!-- Page Content -->
+            <div class="p-4 flex-grow-1">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/table-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

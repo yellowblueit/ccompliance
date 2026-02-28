@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Project {{ project.name or project.id }} - Claude Compliance{% endblock %}
+{% block page_title %}Project Detail{% endblock %}
+
+{% block content %}
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <a href="{{ url_for('projects.index') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Projects
+    </a>
+    <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+        <i class="bi bi-trash me-1"></i>Delete Project
+    </button>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row g-4">
+    <!-- Project Info -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">Project Information</div>
+            <div class="card-body p-0">
+                <table class="table mb-0">
+                    <tr><td class="fw-bold" style="width:150px">Name</td><td>{{ project.name or 'Untitled' }}</td></tr>
+                    <tr><td class="fw-bold">Project ID</td><td class="mono" style="word-break:break-all">{{ project.id }}</td></tr>
+                    <tr><td class="fw-bold">Description</td><td>{{ project.description or 'N/A' }}</td></tr>
+                    <tr><td class="fw-bold">Visibility</td><td>
+                        {% if project.visibility == 'public' %}
+                        <span class="badge bg-success">{{ project.visibility }}</span>
+                        {% elif project.visibility %}
+                        <span class="badge bg-secondary">{{ project.visibility }}</span>
+                        {% else %}N/A{% endif %}
+                    </td></tr>
+                    <tr><td class="fw-bold">Organization</td><td class="mono">{{ project.organization_id or 'N/A' }}</td></tr>
+                    <tr><td class="fw-bold">Created</td><td>{{ project.created_at|format_dt or 'N/A' }}</td></tr>
+                    <tr><td class="fw-bold">Updated</td><td>{{ project.updated_at|format_dt or 'N/A' }}</td></tr>
+                    <tr><td class="fw-bold">Archived</td><td>{{ project.archived_at|format_dt or 'Not archived' }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Creator Info -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">Creator</div>
+            <div class="card-body p-0">
+                {% if project.creator %}
+                <table class="table mb-0">
+                    <tr><td class="fw-bold" style="width:150px">Email</td><td>{{ project.creator.get('email_address', 'N/A') }}</td></tr>
+                    <tr><td class="fw-bold">User ID</td><td class="mono">{{ project.creator.get('id', 'N/A') }}</td></tr>
+                    <tr><td class="fw-bold">Name</td><td>{{ project.creator.get('name', 'N/A') }}</td></tr>
+                </table>
+                {% else %}
+                <p class="p-3 mb-0 text-muted">No creator information available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Template -->
+    {% if project.prompt_template %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">Prompt Template</div>
+            <div class="card-body">
+                <pre class="mb-0" style="white-space:pre-wrap">{{ project.prompt_template }}</pre>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Attachments -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">Attachments ({{ attachments|length }})</div>
+            {% if attachments %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Filename</th>
+                            <th>Type</th>
+                            <th>ID</th>
+                            <th>Created</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for att in attachments %}
+                        <tr>
+                            <td class="fw-bold">{{ att.file_name or att.filename or 'Unknown' }}</td>
+                            <td><span class="badge bg-secondary">{{ att.file_type or att.type or 'N/A' }}</span></td>
+                            <td class="mono">{{ att.id or '' }}</td>
+                            <td class="text-nowrap">{{ att.created_at|format_dt }}</td>
+                            <td class="text-end">
+                                {% if att.document_id or att.id %}
+                                <a href="{{ url_for('projects.document', document_id=att.document_id or att.id) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye me-1"></i>View
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body">
+                <p class="text-muted mb-0">No attachments found.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Raw JSON -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <a class="text-decoration-none" data-bs-toggle="collapse" href="#rawJson">
+                    Raw JSON <i class="bi bi-chevron-down"></i>
+                </a>
+            </div>
+            <div class="collapse" id="rawJson">
+                <div class="json-view">{{ project_json }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to permanently delete this project?</p>
+                <p><strong>{{ project.name or 'Untitled' }}</strong></p>
+                <p class="mb-2">Type the project ID to confirm:</p>
+                <code class="d-block mb-2" id="deleteTargetId">{{ project.id }}</code>
+                <input type="text" class="form-control" id="deleteConfirmInput" placeholder="Paste project ID here">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('projects.delete', project_id=project.id) }}">
+                    <button type="submit" class="btn btn-danger" id="deleteConfirmBtn" disabled>
+                        <i class="bi bi-trash me-1"></i>Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var input = document.getElementById('deleteConfirmInput');
+    var btn = document.getElementById('deleteConfirmBtn');
+    var target = document.getElementById('deleteTargetId');
+    if (input && btn && target) {
+        input.addEventListener('input', function() {
+            btn.disabled = input.value.trim() !== target.textContent.trim();
+        });
+    }
+});
+</script>
+{% endblock %}

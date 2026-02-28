@@ -1,0 +1,613 @@
+{% extends "base.html" %}
+{% block title %}Activity {{ activity_id[:12] }}… — Claude Compliance{% endblock %}
+{% block page_title %}Activity Detail{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+.dc { border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05); background:#fff; }
+.dc-hd { background:#f9fafb; border-bottom:1px solid #f0f0f0; padding:8px 14px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#6b7280; display:flex; align-items:center; gap:6px; }
+.dc-hd i { font-size:13px; color:#9ca3af; }
+.dt { margin-bottom:0; }
+.dt td { padding:5px 14px; font-size:12px; border-color:#f5f5f5; vertical-align:middle; line-height:1.4; }
+.dt td:first-child { color:#9ca3af; font-weight:500; width:72px; white-space:nowrap; }
+#geoMap { height:130px; z-index:1; }
+.avatar-sm { width:36px; height:36px; border-radius:50%; background:#e9ecef; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }
+.avatar-sm img { width:100%; height:100%; object-fit:cover; }
+/* Attachment grid */
+.attach-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; padding:12px; }
+.attach-item { border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; background:#fafafa; cursor:pointer; transition:border-color .15s,box-shadow .15s; }
+.attach-item:hover { border-color:#6b21a8; box-shadow:0 2px 8px rgba(107,33,168,.12); }
+.attach-thumb { height:90px; display:flex; align-items:center; justify-content:center; background:#f3f4f6; overflow:hidden; }
+.attach-thumb img { max-width:100%; max-height:100%; object-fit:contain; }
+.attach-thumb .file-icon { font-size:2rem; color:#9ca3af; }
+.attach-info { padding:6px 10px; display:flex; align-items:center; justify-content:space-between; gap:4px; }
+.attach-info .fname { font-size:11px; color:#374151; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="detailRoot">
+    <div class="text-center py-5">
+        <div class="spinner-border text-muted" role="status"></div>
+        <p class="text-muted small mt-2">Loading activity…</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function() {
+    var activityId = '{{ activity_id }}';
+    var root = document.getElementById('detailRoot');
+    var typeCats = {{ activity_type_cats|tojson }};
+    var DISPLAY_TZ = '{{ display_timezone|default("UTC") }}';
+
+    function formatDt(isoStr) {
+        if (!isoStr) return '';
+        try {
+            var d = new Date(isoStr.endsWith('Z') || isoStr.includes('+') ? isoStr : isoStr + 'Z');
+            if (isNaN(d.getTime())) return isoStr.substring(0, 19);
+            return d.toLocaleString('en-CA', {
+                timeZone: DISPLAY_TZ, year:'numeric', month:'2-digit', day:'2-digit',
+                hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+            }).replace(',', '');
+        } catch(e) { return isoStr.substring(0, 19); }
+    }
+
+    function render(activity) {
+        var typeColors = {Authentication:'primary',Chats:'info',Files:'success',Projects:'warning',API:'danger',Organization:'dark',Artifacts:'secondary','Chat Snapshots':'info',Billing:'danger',Customizations:'secondary',Groups:'dark',Integrations:'success','SSO & Directory Sync':'primary','Service Keys':'danger','Session Shares':'info'};
+        var actType = activity.type || '';
+        var category = '';
+        for (var cat in typeCats) {
+            if (typeCats[cat].indexOf(actType) !== -1) { category = cat; break; }
+        }
+        var badgeColor = typeColors[category] || 'secondary';
+
+        function esc(s) { var d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+        function mono(s) { return '<span class="mono" style="font-size:10px">' + esc(s) + '</span>'; }
+
+        var fileTypes = ['claude_file_uploaded','claude_file_deleted','claude_file_viewed','claude_file_access_failed'];
+        var chatTypes = ['claude_chat_created','claude_chat_updated','claude_chat_viewed','claude_chat_deleted',
+                         'claude_chat_deletion_failed','claude_chat_access_failed','claude_chat_settings_updated'];
+
+        var fileId = null;
+        if (fileTypes.indexOf(actType) !== -1) {
+            fileId = activity.claude_file_id || activity.file_id || activity.claude_chat_file_id || null;
+            if (!fileId) { var fo = activity.file || activity.claude_file || {}; fileId = fo.id || fo.file_id || null; }
+        }
+        var chatId = null;
+        if (chatTypes.indexOf(actType) !== -1) {
+            chatId = activity.claude_chat_id || activity.chat_id || null;
+            if (!chatId) { var co = activity.chat || activity.claude_chat || {}; chatId = co.id || co.chat_id || null; }
+        }
+        var actor = activity.actor || null;
+        var ip = actor ? (actor.ip_address || '') : '';
+        var email = actor ? (actor.email_address || actor.unauthenticated_email_address || 'N/A') : 'N/A';
+        var projId = activity.claude_project_id || activity.project_id || null;
+
+        var skipKeys = {id:1,created_at:1,organization_id:1,organization_uuid:1,actor:1,type:1,
+            claude_chat_id:1,chat_id:1,claude_project_id:1,project_id:1,
+            claude_file_id:1,file_id:1,claude_chat_file_id:1,file:1,claude_file:1,chat:1,claude_chat:1,note:1};
+        var extraFields = [];
+        for (var k in activity) { if (!skipKeys[k]) extraFields.push({key:k, val:activity[k]}); }
+
+        // ════════════════════════════════════════════════════
+        // BUILD HTML
+        // ════════════════════════════════════════════════════
+        var html = '';
+
+        // ── Compact header ──
+        html += '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">';
+        html += '<div class="d-flex align-items-center gap-2">';
+        html += '<a href="{{ url_for("activities.index") }}" class="btn btn-sm btn-outline-secondary flex-shrink-0" id="backBtn"><i class="bi bi-arrow-left me-1"></i>Back</a>';
+        html += '<span class="badge bg-' + badgeColor + '" style="font-size:12px;padding:5px 12px;border-radius:16px">' + esc(actType || 'unknown') + '</span>';
+        if (category) html += '<span class="text-muted" style="font-size:12px">' + esc(category) + '</span>';
+        html += '</div>';
+        html += '<div class="d-flex align-items-center gap-2 flex-shrink-0">';
+        html += '<span class="text-muted" style="font-size:12px"><i class="bi bi-clock me-1"></i>' + esc(formatDt(activity.created_at) || 'N/A') + '</span>';
+        html += '<code style="font-size:10px;background:#f3f4f6;padding:2px 7px;border-radius:4px;color:#374151">' + esc(activityId.slice(0,24)) + '…</code>';
+        html += '</div></div>';
+
+        // ── Main row ──
+        html += '<div class="row g-3">';
+
+        // ── Left col ──────────────────────────────────────────────
+        html += '<div class="col-lg-4">';
+
+        // Event info card
+        html += '<div class="dc mb-2">';
+        html += '<div class="dc-hd"><i class="bi bi-info-circle"></i>Event</div>';
+        html += '<table class="table dt">';
+        html += '<tr><td>Org</td><td id="orgCell">' + mono(activity.organization_id || 'N/A') + '</td></tr>';
+        if (chatId) {
+            html += '<tr><td>Chat</td><td><a href="/chats/' + esc(chatId) + '" style="font-size:11px" class="mono">'
+                + esc(chatId.slice(0,20)) + '… <i class="bi bi-box-arrow-up-right" style="font-size:9px"></i></a></td></tr>';
+        }
+        if (projId) html += '<tr><td>Project</td><td>' + mono(projId.slice(0,20) + (projId.length > 20 ? '…' : '')) + '</td></tr>';
+        html += '</table></div>';
+
+        // Actor card (Entra profile merged in)
+        html += '<div class="dc">';
+        html += '<div class="dc-hd"><i class="bi bi-person-badge"></i>Actor';
+        if (actor && actor.type) html += '<span class="badge bg-light text-dark ms-auto" style="font-size:10px;font-weight:500;text-transform:none">' + esc(actor.type) + '</span>';
+        html += '</div>';
+        if (actor) {
+            // Avatar + name (filled async by Entra)
+            html += '<div class="d-flex align-items-center gap-2 px-3 pt-2 pb-1">';
+            html += '<div class="avatar-sm" id="actorPhotoEl"><i class="bi bi-person-fill text-muted" style="font-size:1.2rem"></i></div>';
+            html += '<div style="min-width:0;overflow:hidden">';
+            html += '<div id="actorNameEl" style="font-size:12px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(email) + '</div>';
+            html += '<div id="actorTitleEl" class="text-muted" style="font-size:11px"></div>';
+            html += '</div></div>';
+            // Base rows
+            html += '<table class="table dt" id="actorBaseTable">';
+            html += '<tr><td>Email</td><td><strong style="font-size:12px">' + esc(email) + '</strong></td></tr>';
+            if (actor.user_id) html += '<tr><td>User ID</td><td>' + mono(actor.user_id) + '</td></tr>';
+            if (actor.api_key_id) html += '<tr><td>API Key</td><td>' + mono(actor.api_key_id) + '</td></tr>';
+            html += '<tr><td>IP</td><td>';
+            if (ip) {
+                html += '<span class="mono" style="font-size:11px">' + esc(ip) + '</span> <span id="geoInfo"><span class="spinner-border spinner-border-sm text-muted" style="width:12px;height:12px"></span></span>';
+            } else {
+                html += '<span class="text-muted" style="font-size:12px">N/A</span>';
+            }
+            html += '</td></tr>';
+            html += '<tr><td>UA</td><td><span style="font-size:11px;color:#9ca3af;word-break:break-all">' + esc(actor.user_agent || 'N/A') + '</span></td></tr>';
+            html += '</table>';
+            // Entra rows appended here
+            html += '<div id="entraRows"></div>';
+            // Geo map (inside card, below table)
+            if (ip) html += '<div id="geoMap"></div>';
+        } else {
+            html += '<div class="p-3 text-center text-muted small"><i class="bi bi-person-x d-block mb-1 fs-4"></i>No actor info</div>';
+        }
+        html += '</div>'; // end actor card
+
+        html += '</div>'; // end left col
+
+        // ── Right col ─────────────────────────────────────────────
+        html += '<div class="col-lg-8">';
+
+        // Extra fields (collapsible, shown by default)
+        if (extraFields.length) {
+            html += '<div class="dc mb-3">';
+            html += '<div class="dc-hd" style="cursor:pointer" data-bs-toggle="collapse" data-bs-target="#extraFieldsBody">';
+            html += '<i class="bi bi-list-ul"></i>Additional Data';
+            html += '<i class="bi bi-chevron-down ms-auto" style="font-size:11px"></i></div>';
+            html += '<div class="collapse show" id="extraFieldsBody"><table class="table dt mb-0">';
+            extraFields.forEach(function(f) {
+                var val = (typeof f.val === 'object' && f.val !== null)
+                    ? '<pre class="mb-0 mono" style="white-space:pre-wrap;font-size:11px;background:#f8f9fa;padding:6px;border-radius:4px;max-height:120px;overflow-y:auto">' + esc(JSON.stringify(f.val,null,2)) + '</pre>'
+                    : esc(String(f.val));
+                html += '<tr><td>' + esc(f.key) + '</td><td>' + val + '</td></tr>';
+            });
+            html += '</table></div></div>';
+        }
+
+        // Chat messages
+        if (chatId) {
+            html += '<div class="dc mb-3">';
+            html += '<div class="dc-hd d-flex justify-content-between align-items-center">';
+            html += '<span><i class="bi bi-chat-dots"></i>Conversation <span id="chatMsgCount" style="font-weight:400;color:#9ca3af"></span></span>';
+            html += '<a href="/chats/' + esc(chatId) + '" class="btn btn-outline-primary" style="font-size:11px;padding:2px 8px">Open Chat <i class="bi bi-box-arrow-up-right ms-1"></i></a>';
+            html += '</div>';
+            html += '<div style="max-height:560px;overflow-y:auto;padding:12px" id="chatMessagesContainer">';
+            html += '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-muted"></div></div>';
+            html += '</div></div>';
+        }
+
+        // File preview
+        if (fileId) {
+            html += '<div class="dc mb-3">';
+            html += '<div class="dc-hd d-flex justify-content-between align-items-center">';
+            html += '<span><i class="bi bi-file-earmark"></i>File Attachment</span>';
+            html += '<a href="/activities/files/' + esc(fileId) + '/download" class="btn btn-primary" style="font-size:11px;padding:2px 8px"><i class="bi bi-download me-1"></i>Download</a>';
+            html += '</div>';
+            html += '<div class="p-3">';
+            html += '<div class="text-muted mb-2" style="font-size:11px">ID: <code>' + esc(fileId) + '</code></div>';
+            html += '<div id="filePreviewArea">';
+            html += '<div class="text-center py-3" id="previewLoading"><div class="spinner-border spinner-border-sm text-muted"></div></div>';
+            html += '<div id="previewContent" class="d-none"></div>';
+            html += '<div id="previewFallback" class="d-none text-center py-4"><i class="bi bi-file-earmark fs-2 text-muted d-block mb-2"></i>';
+            html += '<p class="text-muted small mb-2">Preview not available.</p>';
+            html += '<a href="/activities/files/' + esc(fileId) + '/download" class="btn btn-outline-primary btn-sm"><i class="bi bi-download me-1"></i>Download to view</a></div>';
+            html += '</div></div></div>';
+        }
+
+        // If right col is empty, show nothing (actor/event info in left is sufficient)
+        html += '</div>'; // end right col
+
+        html += '</div>'; // end row
+
+        // Attachments (full width)
+        if (chatId) html += '<div id="attachmentsSection" class="mt-3" style="display:none"></div>';
+
+        // Lightbox modal
+        html += '<div class="modal fade" id="imageLightbox" tabindex="-1"><div class="modal-dialog modal-fullscreen"><div class="modal-content" style="background:rgba(0,0,0,.92)">';
+        html += '<div class="modal-header border-0 py-2 px-3" style="background:rgba(0,0,0,.5)"><span class="text-white small" id="lightboxFilename"></span>';
+        html += '<div class="d-flex align-items-center gap-2">';
+        html += '<button type="button" class="btn btn-sm btn-outline-light" id="lightboxZoomIn"><i class="bi bi-zoom-in"></i></button>';
+        html += '<button type="button" class="btn btn-sm btn-outline-light" id="lightboxZoomOut"><i class="bi bi-zoom-out"></i></button>';
+        html += '<button type="button" class="btn btn-sm btn-outline-light" id="lightboxFit"><i class="bi bi-arrows-fullscreen"></i></button>';
+        html += '<a href="#" id="lightboxDownload" class="btn btn-sm btn-outline-light"><i class="bi bi-download"></i></a>';
+        html += '<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>';
+        html += '</div></div>';
+        html += '<div class="modal-body d-flex align-items-center justify-content-center p-0" style="overflow:auto;cursor:grab" id="lightboxBody">';
+        html += '<img id="lightboxImg" src="" alt="" style="transition:transform .15s ease;transform-origin:center center">';
+        html += '</div></div></div></div>';
+
+        // Raw JSON (collapsed)
+        html += '<div class="dc mt-3">';
+        html += '<div class="dc-hd" style="cursor:pointer" data-bs-toggle="collapse" data-bs-target="#rawJson">';
+        html += '<i class="bi bi-code-slash"></i>Raw JSON<i class="bi bi-chevron-right ms-auto" style="font-size:11px"></i></div>';
+        html += '<div class="collapse" id="rawJson"><pre style="margin:0;padding:12px;font-size:11px;overflow-x:auto;max-height:350px;overflow-y:auto;background:#f8f9fa;color:#374151">' + esc(JSON.stringify(activity, null, 2)) + '</pre></div>';
+        html += '</div>';
+
+        root.innerHTML = html;
+
+        // ════════════════════════════════════════════════════
+        // EVENT HANDLERS & ASYNC LOADING
+        // ════════════════════════════════════════════════════
+
+        // Back button
+        var backBtn = document.getElementById('backBtn');
+        if (backBtn && window.history.length > 1) {
+            backBtn.addEventListener('click', function(e) { e.preventDefault(); window.history.back(); });
+        }
+
+        // Lightbox
+        var zoomLevel = 1, MIN_ZOOM = 0.1, MAX_ZOOM = 8;
+        function openLightbox(url, fname, downloadUrl) {
+            var lm = document.getElementById('imageLightbox');
+            var li = document.getElementById('lightboxImg');
+            var lf = document.getElementById('lightboxFilename');
+            var ld = document.getElementById('lightboxDownload');
+            if (!lm) return;
+            li.src = url; li.alt = fname || ''; lf.textContent = fname || '';
+            if (ld) ld.href = downloadUrl || url;
+            zoomLevel = 1; li.style.transform = 'scale(1)';
+            li.style.maxWidth = '100%'; li.style.maxHeight = '100%';
+            new bootstrap.Modal(lm).show();
+        }
+        function applyZoom() {
+            var li = document.getElementById('lightboxImg');
+            zoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel));
+            li.style.maxWidth = zoomLevel <= 1 ? '100%' : 'none';
+            li.style.maxHeight = zoomLevel <= 1 ? '100%' : 'none';
+            li.style.transform = 'scale(' + zoomLevel + ')';
+        }
+        setTimeout(function() {
+            var lm = document.getElementById('imageLightbox');
+            var lb = document.getElementById('lightboxBody');
+            if (!lm) return;
+            var zi = document.getElementById('lightboxZoomIn');
+            var zo = document.getElementById('lightboxZoomOut');
+            var zf = document.getElementById('lightboxFit');
+            if (zi) zi.addEventListener('click', function() { zoomLevel *= 1.3; applyZoom(); });
+            if (zo) zo.addEventListener('click', function() { zoomLevel /= 1.3; applyZoom(); });
+            if (zf) zf.addEventListener('click', function() { zoomLevel = 1; applyZoom(); });
+            if (lb) {
+                lb.addEventListener('wheel', function(e) { e.preventDefault(); zoomLevel *= e.deltaY < 0 ? 1.15 : (1/1.15); applyZoom(); }, {passive:false});
+                var isDrag = false, sx, sy, sl, st;
+                lb.addEventListener('mousedown', function(e) {
+                    var li = document.getElementById('lightboxImg');
+                    if (e.target === li || e.target === lb) { isDrag = true; lb.style.cursor = 'grabbing'; sx = e.pageX - lb.offsetLeft; sy = e.pageY - lb.offsetTop; sl = lb.scrollLeft; st = lb.scrollTop; }
+                });
+                lb.addEventListener('mousemove', function(e) { if (!isDrag) return; e.preventDefault(); lb.scrollLeft = sl - (e.pageX - lb.offsetLeft - sx); lb.scrollTop = st - (e.pageY - lb.offsetTop - sy); });
+                document.addEventListener('mouseup', function() { isDrag = false; if (lb) lb.style.cursor = 'grab'; });
+                lb.addEventListener('dblclick', function() { zoomLevel = zoomLevel === 1 ? 2 : 1; applyZoom(); });
+            }
+            lm.addEventListener('keydown', function(e) {
+                if (e.key === '+' || e.key === '=') { zoomLevel *= 1.3; applyZoom(); }
+                else if (e.key === '-') { zoomLevel /= 1.3; applyZoom(); }
+                else if (e.key === '0') { zoomLevel = 1; applyZoom(); }
+            });
+            lm.addEventListener('hidden.bs.modal', function() { document.getElementById('lightboxImg').src = ''; zoomLevel = 1; });
+        }, 0);
+
+        // ── Entra ID profile (merged into actor card) ──
+        (function() {
+            if (!actor || !email || email === 'N/A') return;
+            fetch('/activities/api/user-profile/' + encodeURIComponent(email))
+                .then(function(r) { return r.json(); })
+                .then(function(p) {
+                    if (!p || !p.available) return;
+                    // Avatar
+                    var photoEl = document.getElementById('actorPhotoEl');
+                    if (photoEl && p.photo_data_uri) {
+                        photoEl.innerHTML = '<img src="' + p.photo_data_uri + '" alt="" style="width:100%;height:100%;object-fit:cover">';
+                    }
+                    // Name + title
+                    var nameEl = document.getElementById('actorNameEl');
+                    if (nameEl && p.displayName) nameEl.textContent = p.displayName;
+                    var titleEl = document.getElementById('actorTitleEl');
+                    if (titleEl) {
+                        var parts = [p.jobTitle, p.department].filter(Boolean);
+                        titleEl.textContent = parts.join(' · ');
+                    }
+                    // Append Entra-specific rows
+                    var rows = document.getElementById('entraRows');
+                    if (!rows) return;
+                    var h = '<table class="table dt mb-0">';
+                    if (p.officeLocation) h += '<tr><td>Office</td><td>' + esc(p.officeLocation) + '</td></tr>';
+                    var phones = [];
+                    if (p.businessPhones && p.businessPhones.length) phones = phones.concat(p.businessPhones);
+                    if (p.mobilePhone) phones.push(p.mobilePhone + ' (m)');
+                    if (phones.length) h += '<tr><td>Phone</td><td>' + esc(phones.join(', ')) + '</td></tr>';
+                    var addrParts = [];
+                    if (p.streetAddress) addrParts.push(p.streetAddress);
+                    var city = [p.city, p.state, p.postalCode].filter(Boolean).join(', ');
+                    if (city) addrParts.push(city);
+                    if (p.countryOrRegion) addrParts.push(p.countryOrRegion);
+                    if (addrParts.length) h += '<tr><td>Address</td><td style="line-height:1.6">' + addrParts.map(esc).join('<br>') + '</td></tr>';
+                    if (p.manager) {
+                        var m = p.manager;
+                        var mt = esc(m.displayName || '');
+                        if (m.jobTitle) mt += '<br><span style="font-size:11px;color:#6b7280">' + esc(m.jobTitle) + '</span>';
+                        if (m.mail) mt += '<br><a href="mailto:' + esc(m.mail) + '" style="font-size:11px">' + esc(m.mail) + '</a>';
+                        h += '<tr><td>Manager</td><td>' + mt + '</td></tr>';
+                    }
+                    var status = p.accountEnabled === false
+                        ? '<span class="badge bg-danger" style="font-size:10px">Disabled</span>'
+                        : '<span class="badge bg-success" style="font-size:10px">Active</span>';
+                    h += '<tr><td>Status</td><td>' + status + '</td></tr>';
+                    h += '</table>';
+                    rows.innerHTML = h;
+                }).catch(function() {});
+        })();
+
+        // ── Org name ──
+        if (activity.organization_id || activity.organization_uuid) {
+            var orgCell = document.getElementById('orgCell');
+            var orgId = activity.organization_id || activity.organization_uuid;
+            fetch('{{ url_for("activities.api_org_names") }}')
+                .then(function(r) { return r.json(); })
+                .then(function(names) {
+                    var name = names[orgId] || names[activity.organization_uuid || ''];
+                    if (name && orgCell) {
+                        orgCell.innerHTML = '<strong style="font-size:12px">' + esc(name) + '</strong>'
+                            + '<br><span class="mono" style="font-size:10px;color:#9ca3af">' + esc(orgId) + '</span>';
+                    }
+                }).catch(function(){});
+        }
+
+        // ── Attachments ──
+        function renderAttachments(files) {
+            var section = document.getElementById('attachmentsSection');
+            if (!section || !files.length) return;
+            var h = '<div class="dc mt-0">';
+            h += '<div class="dc-hd d-flex justify-content-between align-items-center">';
+            h += '<span><i class="bi bi-paperclip"></i>Attachments <span class="badge bg-light text-dark ms-1" style="font-size:10px">' + files.length + '</span></span>';
+            h += '<button class="btn btn-primary btn-sm" id="downloadAllBtn"><i class="bi bi-download me-1"></i>Download All</button>';
+            h += '</div>';
+            h += '<div class="attach-grid">';
+            files.forEach(function(f, idx) {
+                var isImage = (f.mime || '').startsWith('image/');
+                var previewSrc = '/activities/files/' + encodeURIComponent(f.id) + '/preview';
+                var dlSrc = '/activities/files/' + encodeURIComponent(f.id) + '/download';
+                h += '<div class="attach-item" data-idx="' + idx + '">';
+                h += '<div class="attach-thumb">';
+                if (isImage) {
+                    h += '<img src="' + previewSrc + '" alt="' + esc(f.name) + '" loading="lazy">';
+                } else {
+                    var icon = 'bi-file-earmark';
+                    var m = (f.mime || '').toLowerCase();
+                    if (m === 'application/pdf') icon = 'bi-file-earmark-pdf';
+                    else if (m.startsWith('text/')) icon = 'bi-file-earmark-text';
+                    else if (m.includes('spreadsheet') || m.includes('csv') || m.includes('excel')) icon = 'bi-file-earmark-spreadsheet';
+                    else if (m.includes('zip') || m.includes('tar') || m.includes('gzip')) icon = 'bi-file-earmark-zip';
+                    else if (m.startsWith('audio/')) icon = 'bi-file-earmark-music';
+                    else if (m.startsWith('video/')) icon = 'bi-file-earmark-play';
+                    h += '<i class="bi ' + icon + ' file-icon"></i>';
+                }
+                h += '</div><div class="attach-info">';
+                h += '<span class="fname" title="' + esc(f.name) + '">' + esc(f.name) + '</span>';
+                h += '<a href="' + dlSrc + '" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation()" title="Download" style="padding:1px 5px"><i class="bi bi-download" style="font-size:11px"></i></a>';
+                h += '</div></div>';
+            });
+            h += '</div></div>';
+            section.innerHTML = h;
+            section.style.display = '';
+
+            section.querySelectorAll('.attach-item').forEach(function(item) {
+                item.addEventListener('click', function() {
+                    var f = files[parseInt(this.dataset.idx, 10)];
+                    if (!f) return;
+                    var isImage = (f.mime || '').startsWith('image/');
+                    var previewSrc = '/activities/files/' + encodeURIComponent(f.id) + '/preview';
+                    var dlSrc = '/activities/files/' + encodeURIComponent(f.id) + '/download';
+                    if (isImage) openLightbox(previewSrc, f.name, dlSrc);
+                    else window.location.href = dlSrc;
+                });
+            });
+
+            var dlAllBtn = document.getElementById('downloadAllBtn');
+            if (dlAllBtn) {
+                dlAllBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var ids = files.map(function(f) { return f.id; });
+                    dlAllBtn.disabled = true;
+                    dlAllBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing…';
+                    fetch('/activities/files/download-all', {
+                        method:'POST', headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({file_ids:ids})
+                    }).then(function(resp) {
+                        if (!resp.ok) throw new Error('Download failed');
+                        var fm = (resp.headers.get('Content-Disposition')||'').match(/filename="?([^";\n]+)"?/);
+                        return resp.blob().then(function(blob) { return {blob:blob, fname:fm?fm[1]:'attachments.zip'}; });
+                    }).then(function(data) {
+                        var url = URL.createObjectURL(data.blob);
+                        var a = document.createElement('a'); a.href = url; a.download = data.fname;
+                        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+                        dlAllBtn.disabled = false; dlAllBtn.innerHTML = '<i class="bi bi-download me-1"></i>Download All';
+                    }).catch(function(err) {
+                        dlAllBtn.disabled = false; dlAllBtn.innerHTML = '<i class="bi bi-download me-1"></i>Download All';
+                        alert('Failed: ' + err.message);
+                    });
+                });
+            }
+        }
+
+        // ── Chat messages ──
+        if (chatId) {
+            var container = document.getElementById('chatMessagesContainer');
+            var countEl = document.getElementById('chatMsgCount');
+            fetch('/activities/api/chat-messages/' + chatId)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var msgs = data.messages || [];
+                    if (countEl) countEl.textContent = '(' + msgs.length + ')';
+                    if (!msgs.length) {
+                        container.innerHTML = '<div class="text-center py-4 text-muted"><i class="bi bi-chat-left-text fs-3 d-block mb-2"></i><p class="mb-0 small">No messages. <a href="/chats/' + esc(chatId) + '">View full chat</a>.</p></div>';
+                        return;
+                    }
+                    // Extract attachments
+                    var allFiles = [], seenIds = {};
+                    msgs.forEach(function(msg) {
+                        var files = msg.files || msg.attachments || msg.file_attachments || [];
+                        if (!Array.isArray(files)) files = [];
+                        files.forEach(function(f) {
+                            var fId = f.id || f.file_id || '';
+                            if (!fId || seenIds[fId]) return;
+                            seenIds[fId] = true;
+                            allFiles.push({id:fId, name:f.filename||f.file_name||f.name||fId, mime:f.mime_type||f.content_type||''});
+                        });
+                    });
+                    if (allFiles.length) renderAttachments(allFiles);
+                    // Render messages
+                    var h = '';
+                    msgs.forEach(function(msg) {
+                        var role = msg.role || msg.sender || 'unknown';
+                        var isUser = role === 'user' || role === 'human';
+                        h += '<div class="' + (isUser ? 'msg-user' : 'msg-claude') + ' mb-2">';
+                        h += '<div class="d-flex justify-content-between align-items-center mb-1">';
+                        h += '<strong style="font-size:12px">' + (isUser ? '<i class="bi bi-person-fill me-1"></i>User' : '<i class="bi bi-robot me-1"></i>Claude') + '</strong>';
+                        h += '<small class="text-muted">' + esc(formatDt(msg.created_at || msg.timestamp || '')) + '</small></div>';
+                        h += '<div class="msg-content">';
+                        var content = msg.content || msg.text || '';
+                        if (typeof content === 'string') {
+                            h += '<div style="white-space:pre-wrap">' + esc(content) + '</div>';
+                        } else if (Array.isArray(content)) {
+                            content.forEach(function(part) {
+                                if (typeof part === 'string') h += '<div style="white-space:pre-wrap">' + esc(part) + '</div>';
+                                else if (part && part.type === 'text') h += '<div style="white-space:pre-wrap">' + esc(part.text || '') + '</div>';
+                                else if (part && part.type === 'tool_use') h += '<div class="mt-1 p-2 rounded" style="background:#f0f0f0;font-size:0.82em"><i class="bi bi-tools me-1"></i><strong>' + esc(part.name||'Tool') + '</strong></div>';
+                                else if (part && part.type === 'tool_result') h += '<div class="mt-1 p-2 rounded" style="background:#e8f5e9;font-size:0.82em"><i class="bi bi-check-circle me-1"></i>Tool Result</div>';
+                            });
+                        }
+                        h += '</div></div>';
+                    });
+                    container.innerHTML = h;
+                }).catch(function() {
+                    container.innerHTML = '<div class="text-center py-3 text-muted small"><p class="mb-0">Failed to load messages. <a href="/chats/' + esc(chatId) + '">View full chat</a>.</p></div>';
+                });
+        }
+
+        // ── IP Geolocation + Map ──
+        if (ip) {
+            var geoInfo = document.getElementById('geoInfo');
+            var mapEl = document.getElementById('geoMap');
+            fetch('/activities/geolocate/' + ip)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 'success') {
+                        var loc = data.city + ', ' + data.regionName + ', ' + data.country;
+                        var gh = '<span style="font-size:11px;color:#374151"><i class="bi bi-geo-alt-fill me-1 text-danger"></i>' + esc(loc) + '</span>';
+                        if (data.isp || data.org) {
+                            var extra = [];
+                            if (data.org) extra.push(data.org);
+                            if (data.isp && data.isp !== data.org) extra.push(data.isp);
+                            if (data.timezone) extra.push(data.timezone);
+                            gh += '<br><span style="font-size:10px;color:#9ca3af">' + esc(extra.join(' · ')) + '</span>';
+                        }
+                        if (geoInfo) geoInfo.innerHTML = gh;
+                        if (mapEl && data.lat && data.lon) {
+                            var map = L.map('geoMap', {scrollWheelZoom:false,dragging:true,zoomControl:true}).setView([data.lat,data.lon],10);
+                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:18}).addTo(map);
+                            L.marker([data.lat,data.lon]).addTo(map).bindPopup('<strong>'+esc(ip)+'</strong><br>'+esc(loc)).openPopup();
+                        }
+                    } else {
+                        if (geoInfo) geoInfo.innerHTML = '<span class="text-muted" style="font-size:11px">Location unavailable</span>';
+                        if (mapEl) mapEl.style.display = 'none';
+                    }
+                }).catch(function() {
+                    if (geoInfo) geoInfo.innerHTML = '<span class="text-muted" style="font-size:11px">Lookup failed</span>';
+                    if (mapEl) mapEl.style.display = 'none';
+                });
+        }
+
+        // ── File Preview ──
+        if (fileId) {
+            var previewUrl = '/activities/files/' + fileId + '/preview';
+            var downloadUrl = '/activities/files/' + fileId + '/download';
+            var loading = document.getElementById('previewLoading');
+            var contentEl = document.getElementById('previewContent');
+            var fallback = document.getElementById('previewFallback');
+            var currentFname = fileId;
+
+            fetch(previewUrl, {method:'HEAD'})
+                .then(function(resp) {
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    var ct = (resp.headers.get('Content-Type')||'').toLowerCase();
+                    var fm = (resp.headers.get('Content-Disposition')||'').match(/filename="?([^";\n]+)"?/);
+                    if (fm) currentFname = fm[1];
+                    loading.classList.add('d-none');
+                    if (ct.startsWith('image/')) {
+                        contentEl.innerHTML = '<div class="text-center"><img src="'+previewUrl+'" alt="'+esc(currentFname)+'" class="img-fluid rounded" style="max-height:360px;cursor:zoom-in" id="previewImg"><div class="mt-2"><button class="btn btn-sm btn-outline-secondary" id="inlineExpandBtn"><i class="bi bi-arrows-fullscreen me-1"></i>Expand</button></div></div>';
+                        contentEl.classList.remove('d-none');
+                        contentEl.querySelector('#previewImg').addEventListener('click', function() { openLightbox(previewUrl, currentFname, downloadUrl); });
+                        document.getElementById('inlineExpandBtn').addEventListener('click', function() { openLightbox(previewUrl, currentFname, downloadUrl); });
+                    } else if (ct === 'application/pdf') {
+                        contentEl.innerHTML = '<iframe src="'+previewUrl+'" style="width:100%;height:600px;border:1px solid #e5e7eb;border-radius:6px"></iframe>';
+                        contentEl.classList.remove('d-none');
+                    } else if (ct.startsWith('text/') || ct === 'application/json' || ct === 'application/xml' || ct.includes('csv') || ct.includes('yaml') || ct.includes('markdown')) {
+                        fetch(previewUrl).then(function(r){return r.text();}).then(function(text){
+                            var pre = document.createElement('pre');
+                            pre.style.cssText = 'white-space:pre-wrap;max-height:500px;overflow-y:auto;background:#f8f9fa;padding:12px;border-radius:6px;font-size:12px;border:1px solid #e5e7eb';
+                            pre.textContent = text;
+                            contentEl.appendChild(pre);
+                            contentEl.classList.remove('d-none');
+                        });
+                    } else if (ct.startsWith('audio/')) {
+                        contentEl.innerHTML = '<audio controls class="w-100"><source src="'+previewUrl+'" type="'+ct+'"></audio>';
+                        contentEl.classList.remove('d-none');
+                    } else if (ct.startsWith('video/')) {
+                        contentEl.innerHTML = '<video controls class="w-100 rounded" style="max-height:400px"><source src="'+previewUrl+'" type="'+ct+'"></video>';
+                        contentEl.classList.remove('d-none');
+                    } else {
+                        fallback.classList.remove('d-none');
+                    }
+                }).catch(function() {
+                    loading.classList.add('d-none');
+                    fallback.classList.remove('d-none');
+                });
+        }
+
+    } // end render()
+
+    // Load activity data
+    var raw = null;
+    try { raw = sessionStorage.getItem('activity_' + activityId); } catch(e) {}
+    if (raw) {
+        render(JSON.parse(raw));
+    } else {
+        fetch('/activities/api/activity/' + encodeURIComponent(activityId))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    root.innerHTML = '<div class="alert alert-warning mt-4"><i class="bi bi-exclamation-triangle me-2"></i>'
+                        + data.error + ' <a href="/activities/" class="alert-link">Back to list</a></div>';
+                    return;
+                }
+                try { sessionStorage.setItem('activity_' + activityId, JSON.stringify(data)); } catch(e) {}
+                render(data);
+            })
+            .catch(function() {
+                root.innerHTML = '<div class="alert alert-danger mt-4">Failed to load activity. '
+                    + '<a href="/activities/" class="alert-link">Back to list</a></div>';
+            });
+    }
+})();
+</script>
+{% endblock %}

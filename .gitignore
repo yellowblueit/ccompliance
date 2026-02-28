@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# Secrets & instance config
+config.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code
+.claude/
+
+# Uploads (user-specific logos)
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Excluded files
+=2.8
+document_pdf.pdf
+function_app.py
+test_sync_v4.py
+README.html

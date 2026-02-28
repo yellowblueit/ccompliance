@@ -1,0 +1,283 @@
+:root {
+    /* --anthropic-dark and --anthropic-purple are set dynamically in base.html from branding config */
+    --anthropic-dark: #1a1a2e;
+    --anthropic-purple: #6b21a8;
+    --anthropic-amber: #d97706;
+    --user-bg: #f0f7ff;
+    --user-border: #cce0ff;
+    --user-color: #0066cc;
+    --claude-bg: #f5f0ff;
+    --claude-border: #e0d0ff;
+    --claude-color: #6b21a8;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    background: #f8f9fa;
+}
+
+/* Sidebar */
+.sidebar {
+    background-color: var(--anthropic-dark) !important;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.75);
+    border-radius: 6px;
+    margin-bottom: 2px;
+    padding: 8px 12px;
+    font-size: 13px;
+    transition: all 0.15s;
+}
+
+.sidebar .nav-link:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .nav-link.active {
+    color: #fff;
+    background-color: var(--anthropic-purple);
+}
+
+/* Top bar */
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* Cards */
+.card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.card-header {
+    background: #f8f9fa;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* Status indicators */
+.status-ok { color: #16a34a; }
+.status-warn { color: var(--anthropic-amber); }
+.status-err { color: #dc2626; }
+
+/* Chat message styling */
+.msg-user {
+    background: var(--user-bg);
+    border-left: 4px solid var(--user-border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+
+.msg-claude {
+    background: var(--claude-bg);
+    border-left: 4px solid var(--claude-border);
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+
+.msg-role-user { color: var(--user-color); font-weight: 600; }
+.msg-role-claude { color: var(--claude-color); font-weight: 600; }
+
+/* Data tables */
+.table-hover tbody tr { cursor: pointer; }
+.table th { font-size: 12px; text-transform: uppercase; color: #6b7280; font-weight: 600; letter-spacing: 0.5px; }
+.table td { font-size: 13px; vertical-align: middle; }
+
+/* Filter form */
+.filter-bar {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.filter-bar label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.filter-bar .form-control,
+.filter-bar .form-select {
+    font-size: 13px;
+}
+
+/* JSON viewer */
+.json-view {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+/* Monospace text */
+.mono { font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px; }
+
+/* Badge types */
+.badge-activity { font-size: 11px; }
+
+/* Multi-select type dropdown */
+.form-check-sm { margin-bottom: 1px; }
+.form-check-sm .form-check-input { width: 14px; height: 14px; margin-top: 3px; }
+.form-check-sm .form-check-label { padding-top: 1px; }
+
+/* Sync log */
+.sync-log {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 8px;
+    padding: 16px;
+    font-family: monospace;
+    font-size: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.sync-log .log-info { color: #4ec9b0; }
+.sync-log .log-warning { color: #dcdcaa; }
+.sync-log .log-error { color: #f14c4c; }
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+}
+
+.empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+/* Geo badge */
+.geo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: #166534;
+}
+
+/* Color picker */
+.form-control-color { width: 40px; height: 32px; padding: 2px; cursor: pointer; }
+
+/* Leaflet map in cards */
+.leaflet-container { font-family: inherit; }
+
+/* ── TableManager ─────────────────────────────────────────── */
+.tm-th {
+    cursor: grab;
+    user-select: none;
+    white-space: nowrap;
+}
+.tm-th.tm-sortable { cursor: pointer; }
+.tm-th.tm-dragging { opacity: 0.35; }
+.tm-th.tm-drag-over { box-shadow: inset 3px 0 0 var(--anthropic-purple); }
+
+.tm-arrows {
+    display: inline-flex;
+    flex-direction: column;
+    font-size: 7px;
+    line-height: 1;
+    margin-left: 4px;
+    vertical-align: middle;
+    opacity: 0.2;
+}
+.tm-th.tm-active .tm-arrows { opacity: 1; }
+.tm-th.tm-asc .tm-up { color: var(--anthropic-purple); }
+.tm-th.tm-asc .tm-dn { opacity: 0.2; }
+.tm-th.tm-desc .tm-dn { color: var(--anthropic-purple); }
+.tm-th.tm-desc .tm-up { opacity: 0.2; }
+
+.tm-gear-wrap {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 10;
+}
+.tm-gear-btn {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 13px;
+    color: #6b7280;
+    cursor: pointer;
+    line-height: 1;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.tm-gear-btn:hover { background: #f3f4f6; color: #374151; }
+
+.tm-gear-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 8px 0;
+    min-width: 180px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 20;
+}
+.tm-gear-menu.show { display: block; }
+
+.tm-gear-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    margin: 0;
+}
+.tm-gear-item:hover { background: #f3f4f6; }
+.tm-gear-item input[type="checkbox"] { width: 14px; height: 14px; margin: 0; }
+
+.tm-gear-reset {
+    border-top: 1px solid #e5e7eb;
+    margin-top: 4px;
+    padding: 6px 12px 2px;
+    font-size: 11px;
+    color: #6b7280;
+    cursor: pointer;
+}
+.tm-gear-reset:hover { color: #dc2626; }
+
+/* ── Dashboard Charts ─────────────────────────────────────── */
+#chartsSection canvas {
+    animation: chartFadeIn 0.4s ease-in;
+}
+@keyframes chartFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

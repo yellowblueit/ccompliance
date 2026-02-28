@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Claude Compliance{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block extra_head %}
+{% if status.anthropic_configured %}
+<script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+<script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Status indicators -->
+<div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+    <!-- Status badges -->
+    <span class="badge rounded-pill {{ 'bg-success' if status.anthropic_configured else 'bg-warning text-dark' }} d-inline-flex align-items-center gap-1 py-2 px-3">
+        <i class="bi {{ 'bi-check-circle' if status.anthropic_configured else 'bi-exclamation-circle' }}"></i>
+        Anthropic API
+        {% if status.anthropic_configured and org_count is not none %}
+            &middot; {{ org_count }} org{{ 's' if org_count != 1 }}
+        {% elif api_error %}
+            <span class="text-danger ms-1" title="{{ api_error }}">Error</span>
+        {% endif %}
+    </span>
+
+    <span class="badge rounded-pill {{ 'bg-success' if status.graph_configured else 'bg-warning text-dark' }} d-inline-flex align-items-center gap-1 py-2 px-3">
+        <i class="bi {{ 'bi-check-circle' if status.graph_configured else 'bi-exclamation-circle' }}"></i>
+        Microsoft Graph
+    </span>
+
+    <span class="badge rounded-pill {{ 'bg-success' if status.sync_enabled else 'bg-secondary' }} d-inline-flex align-items-center gap-1 py-2 px-3">
+        <i class="bi {{ 'bi-check-circle' if status.sync_enabled else 'bi-dash-circle' }}"></i>
+        Mailbox Archive
+        {% if status.sync_enabled %}
+            &middot;
+            {% if status.archive_all %}All users
+            {% elif status.archive_user_count %}{{ status.archive_user_count }} user{{ 's' if status.archive_user_count != 1 }}
+            {% else %}No users
+            {% endif %}
+        {% endif %}
+    </span>
+
+    <span class="badge rounded-pill {{ 'bg-success' if status.mailbox_configured else 'bg-secondary' }} d-inline-flex align-items-center gap-1 py-2 px-3">
+        <i class="bi {{ 'bi-check-circle' if status.mailbox_configured else 'bi-dash-circle' }}"></i>
+        Compliance Mailbox
+        {% if status.mailbox_configured %}&middot; {{ config.compliance_mailbox }}{% endif %}
+    </span>
+
+</div>
+
+<!-- Activity Charts -->
+{% if status.anthropic_configured %}
+<div id="chartsError" class="alert alert-warning d-none mb-3">
+    <i class="bi bi-exclamation-triangle me-1"></i><span id="chartsErrorMsg"></span>
+</div>
+<div class="row g-3 mb-3" id="chartsSection">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 text-muted small">
+            <i class="bi bi-bar-chart me-1"></i>Activity Summary
+            <span class="fw-normal ms-1" id="chartTzLabel">(today)</span>
+        </h6>
+        <span id="chartTotalBadge" class="badge bg-light text-dark d-none"></span>
+    </div>
+
+    <!-- Activity by Hour -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header py-2 small" id="hourlyChartHeader">Activity by Hour</div>
+            <div class="card-body py-2">
+                <div id="hourlyChartLoading" class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm text-muted" role="status"></div>
+                    <span class="text-muted small ms-2">Loading chart data...</span>
+                </div>
+                <div id="hourlyChart" style="width:100%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity by Category -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header py-2 small">Activity by Category</div>
+            <div class="card-body py-2 text-center">
+                <div id="categoryChartLoading" class="py-3">
+                    <div class="spinner-border spinner-border-sm text-muted" role="status"></div>
+                    <span class="text-muted small ms-2">Loading...</span>
+                </div>
+                <div id="categoryChart" style="width:100%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Active Users -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header py-2 small">Top Active Users</div>
+            <div class="card-body py-2">
+                <div id="actorsChartLoading" class="text-center py-3">
+                    <div class="spinner-border spinner-border-sm text-muted" role="status"></div>
+                    <span class="text-muted small ms-2">Loading...</span>
+                </div>
+                <div id="actorsChart" style="width:100%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Getting Started -->
+<div class="card">
+    <div class="card-header py-2 small">Getting Started</div>
+    <div class="card-body py-2">
+        <ol class="mb-0 small">
+            <li class="mb-1">
+                <a href="{{ url_for('settings.index') }}">Configure your Anthropic Compliance Access Key</a>
+                in Settings
+            </li>
+            <li class="mb-1">Use the <strong>Activity Feed</strong> to monitor user activities across your organizations</li>
+            <li class="mb-1">Use <strong>Chats</strong> to browse conversations and download file attachments</li>
+            <li class="mb-1">Use <strong>Projects</strong> to view and manage project data</li>
+            <li class="mb-1">Optionally configure <strong>Microsoft Graph</strong> credentials to enable Exchange sync</li>
+            <li>Use <strong>Sync Control</strong> to manually trigger or schedule automatic syncs</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if status.anthropic_configured %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var accentColor = '{{ brand.accent_color|default("#6b21a8") }}';
+    var catColors = ['#6b21a8', '#2563eb', '#059669', '#d97706', '#dc2626', '#6366f1', '#9ca3af'];
+    var embedOpts = {actions: false, renderer: 'svg'};
+
+    function hideLoading(id) {
+        var el = document.getElementById(id);
+        if (el) el.classList.add('d-none');
+    }
+
+    function showError(msg) {
+        ['hourlyChartLoading', 'categoryChartLoading', 'actorsChartLoading'].forEach(hideLoading);
+        document.getElementById('chartsErrorMsg').textContent = msg;
+        document.getElementById('chartsError').classList.remove('d-none');
+    }
+
+    function showEmpty() {
+        ['hourlyChartLoading', 'categoryChartLoading', 'actorsChartLoading'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.innerHTML = '<p class="text-muted small mb-0">No activity data today.</p>';
+        });
+    }
+
+    fetch('{{ url_for("dashboard.api_activity_stats") }}')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) { showError(data.error); return; }
+            if (data.total === 0) { showEmpty(); return; }
+
+            // Update timezone label
+            var tzAbbr = data.tz_abbr || 'UTC';
+            document.getElementById('chartTzLabel').textContent = '(today, ' + tzAbbr + ')';
+            document.getElementById('hourlyChartHeader').textContent = 'Activity by Hour (' + tzAbbr + ')';
+
+            var badge = document.getElementById('chartTotalBadge');
+            badge.textContent = data.total.toLocaleString() + ' activities today';
+            badge.classList.remove('d-none');
+
+            // ── Hourly bar chart ──────────────────────────────
+            hideLoading('hourlyChartLoading');
+            vegaEmbed('#hourlyChart', {
+                "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                "data": {"values": data.hourly},
+                "width": "container", "height": 160,
+                "background": "transparent",
+                "mark": {"type": "bar", "cornerRadiusTopLeft": 3, "cornerRadiusTopRight": 3, "color": accentColor},
+                "encoding": {
+                    "x": {"field": "hour", "type": "ordinal", "title": null,
+                           "axis": {"labelAngle": 0, "labelFontSize": 9}},
+                    "y": {"field": "count", "type": "quantitative", "title": null,
+                           "axis": {"tickMinStep": 1}},
+                    "tooltip": [
+                        {"field": "hour", "title": "Hour (" + tzAbbr + ")"},
+                        {"field": "count", "title": "Activities"}
+                    ]
+                }
+            }, embedOpts).catch(function(e) { console.error('hourlyChart', e); });
+
+            // ── Category arc chart ────────────────────────────
+            hideLoading('categoryChartLoading');
+            vegaEmbed('#categoryChart', {
+                "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                "data": {"values": data.categories},
+                "width": "container", "height": 180,
+                "background": "transparent",
+                "mark": {"type": "arc", "innerRadius": 40},
+                "encoding": {
+                    "theta": {"field": "count", "type": "quantitative"},
+                    "color": {"field": "category", "type": "nominal", "title": null,
+                              "scale": {"range": catColors},
+                              "legend": {"orient": "bottom", "columns": 2, "labelFontSize": 9}},
+                    "tooltip": [
+                        {"field": "category", "title": "Category"},
+                        {"field": "count", "title": "Count"}
+                    ]
+                }
+            }, embedOpts).catch(function(e) { console.error('categoryChart', e); });
+
+            // ── Top actors horizontal bar ─────────────────────
+            if (data.top_actors.length > 0) {
+                hideLoading('actorsChartLoading');
+                var actorHeight = Math.max(100, data.top_actors.length * 22 + 20);
+                vegaEmbed('#actorsChart', {
+                    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                    "data": {"values": data.top_actors},
+                    "width": "container", "height": actorHeight,
+                    "background": "transparent",
+                    "mark": {"type": "bar", "cornerRadiusEnd": 3, "color": accentColor, "opacity": 0.75},
+                    "encoding": {
+                        "y": {"field": "user", "type": "nominal", "title": null,
+                              "sort": "-x",
+                              "axis": {"labelFontSize": 10, "labelLimit": 250}},
+                        "x": {"field": "count", "type": "quantitative", "title": null,
+                              "axis": {"tickMinStep": 1}},
+                        "tooltip": [
+                            {"field": "user", "title": "User"},
+                            {"field": "count", "title": "Activities"}
+                        ]
+                    }
+                }, embedOpts).catch(function(e) { console.error('actorsChart', e); });
+            } else {
+                document.getElementById('actorsChartLoading').innerHTML =
+                    '<p class="text-muted small mb-0">No user activity data today.</p>';
+            }
+        })
+        .catch(function(err) {
+            showError('Failed to load activity charts: ' + err.message);
+        });
+});
+</script>
+{% endif %}
+{% endblock %}

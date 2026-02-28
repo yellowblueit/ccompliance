@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Document - Claude Compliance{% endblock %}
+{% block page_title %}Project Document{% endblock %}
+
+{% block content %}
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <a href="javascript:history.back()" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+    {% if document.id %}
+    <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteDocModal">
+        <i class="bi bi-trash me-1"></i>Delete Document
+    </button>
+    {% endif %}
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if document %}
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">Document Metadata</div>
+            <div class="card-body p-0">
+                <table class="table mb-0">
+                    <tr><td class="fw-bold" style="width:140px">Filename</td><td>{{ document.file_name or document.filename or 'N/A' }}</td></tr>
+                    <tr><td class="fw-bold">Document ID</td><td class="mono" style="word-break:break-all">{{ document.id or 'N/A' }}</td></tr>
+                    <tr><td class="fw-bold">Type</td><td><span class="badge bg-secondary">{{ document.file_type or document.type or 'N/A' }}</span></td></tr>
+                    <tr><td class="fw-bold">Size</td><td>{{ document.file_size or 'N/A' }}</td></tr>
+                    <tr><td class="fw-bold">Created</td><td>{{ document.created_at|format_dt or 'N/A' }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header">Content</div>
+            <div class="card-body">
+                {% if document.content %}
+                <pre class="mb-0" style="white-space:pre-wrap;max-height:600px;overflow-y:auto">{{ document.content }}</pre>
+                {% else %}
+                <p class="text-muted mb-0">No content available for this document.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Raw JSON -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <a class="text-decoration-none" data-bs-toggle="collapse" href="#rawJson">
+                    Raw JSON <i class="bi bi-chevron-down"></i>
+                </a>
+            </div>
+            <div class="collapse" id="rawJson">
+                <div class="json-view">{{ document_json }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+{% if document.id %}
+<div class="modal fade" id="deleteDocModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to permanently delete this document?</p>
+                <p><strong>{{ document.file_name or document.filename or 'Unknown' }}</strong></p>
+                <p class="mb-2">Type the document ID to confirm:</p>
+                <code class="d-block mb-2" id="deleteDocTargetId">{{ document.id }}</code>
+                <input type="text" class="form-control" id="deleteDocConfirmInput" placeholder="Paste document ID here">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('projects.delete_document', document_id=document.id) }}">
+                    <button type="submit" class="btn btn-danger" id="deleteDocConfirmBtn" disabled>
+                        <i class="bi bi-trash me-1"></i>Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var input = document.getElementById('deleteDocConfirmInput');
+    var btn = document.getElementById('deleteDocConfirmBtn');
+    var target = document.getElementById('deleteDocTargetId');
+    if (input && btn && target) {
+        input.addEventListener('input', function() {
+            btn.disabled = input.value.trim() !== target.textContent.trim();
+        });
+    }
+});
+</script>
+{% endblock %}

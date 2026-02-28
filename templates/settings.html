@@ -1,0 +1,758 @@
+{% extends "base.html" %}
+{% block title %}Settings - {{ brand.app_name }}{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('settings.save') }}" enctype="multipart/form-data">
+
+    <!-- ─── Section: API Connections ─────────────────────────────── -->
+    <div class="d-flex align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-plug me-2 text-muted"></i>API Connections</h5>
+        <hr class="flex-grow-1 ms-3">
+    </div>
+
+    <!-- Credential Storage Method -->
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-shield-lock me-2"></i>Credential Storage</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Storage Method</label>
+                            <select class="form-select form-select-sm" name="credential_storage" id="credentialStorage">
+                                <option value="local" {{ "selected" if config.credential_storage != "keyvault" }}>Local (config.json)</option>
+                                <option value="keyvault" {{ "selected" if config.credential_storage == "keyvault" }}>Azure Key Vault</option>
+                            </select>
+                            <div class="form-text">Choose where API secrets are stored.</div>
+                        </div>
+                        <div class="col-md-8" id="kvFields" style="{{ '' if config.credential_storage == 'keyvault' else 'display:none' }}">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Key Vault URL</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control mono" name="keyvault_url"
+                                               value="{{ config.keyvault_url }}" placeholder="https://myvault.vault.azure.net/">
+                                        <button type="button" class="btn btn-outline-success test-conn-btn"
+                                                data-test-url="{{ url_for('settings.test_keyvault') }}">Test</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small text-muted">Anthropic Key Secret Name</label>
+                                    <input type="text" class="form-control form-control-sm mono" name="keyvault_secret_anthropic_key"
+                                           value="{{ config.keyvault_secret_anthropic_key }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small text-muted">Graph Secret Name</label>
+                                    <input type="text" class="form-control form-control-sm mono" name="keyvault_secret_graph_secret"
+                                           value="{{ config.keyvault_secret_graph_secret }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small text-muted">Storage Conn Secret Name</label>
+                                    <input type="text" class="form-control form-control-sm mono" name="keyvault_secret_storage_conn"
+                                           value="{{ config.keyvault_secret_storage_conn }}">
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle me-1"></i>Authentication uses Managed Identity in Azure or Azure CLI locally.
+                                        Enter secret values below to write them to Key Vault on save, or leave blank to keep existing vault values.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-key me-2"></i>Anthropic Compliance API</span>
+                    <button type="button" class="btn btn-sm btn-outline-success test-conn-btn"
+                            data-test-url="{{ url_for('settings.test_anthropic') }}">Test</button>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Compliance Access Key
+                            <span class="badge bg-info text-dark ms-1 kv-badge" style="{{ '' if config.credential_storage == 'keyvault' else 'display:none' }}">
+                                <i class="bi bi-shield-lock"></i> Key Vault
+                            </span>
+                        </label>
+                        <input type="password" class="form-control form-control-sm mono kv-secret-field" name="anthropic_compliance_access_key"
+                               value="{{ config.anthropic_compliance_access_key }}" placeholder="sk-ant-api01-...">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Base URL</label>
+                        <input type="text" class="form-control form-control-sm mono" name="anthropic_base_url"
+                               value="{{ config.anthropic_base_url }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-microsoft me-2"></i>Microsoft Graph API</span>
+                    <button type="button" class="btn btn-sm btn-outline-success test-conn-btn"
+                            data-test-url="{{ url_for('settings.test_graph') }}">Test</button>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Tenant ID</label>
+                        <input type="text" class="form-control form-control-sm mono" name="graph_tenant_id"
+                               value="{{ config.graph_tenant_id }}" placeholder="xxxxxxxx-xxxx-...">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Client ID</label>
+                        <input type="text" class="form-control form-control-sm mono" name="graph_client_id"
+                               value="{{ config.graph_client_id }}">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">
+                            Client Secret
+                            <span class="badge bg-info text-dark ms-1 kv-badge" style="{{ '' if config.credential_storage == 'keyvault' else 'display:none' }}">
+                                <i class="bi bi-shield-lock"></i> Key Vault
+                            </span>
+                        </label>
+                        <input type="password" class="form-control form-control-sm mono kv-secret-field" name="graph_client_secret"
+                               value="{{ config.graph_client_secret }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Section: Archive Configuration ───────────────────────── -->
+    <div class="d-flex align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-archive me-2 text-muted"></i>Archive Configuration</h5>
+        <hr class="flex-grow-1 ms-3">
+    </div>
+    <div class="row g-3 mb-4">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-envelope me-2"></i>Compliance Mailbox</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Mailbox Email</label>
+                        <input type="email" class="form-control form-control-sm" name="compliance_mailbox"
+                               value="{{ config.compliance_mailbox }}" placeholder="compliance@yourorg.com">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mail Folder Name</label>
+                        <input type="text" class="form-control form-control-sm" name="compliance_folder_name"
+                               value="{{ config.compliance_folder_name }}" placeholder="Anthropic Claude Archive">
+                    </div>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" name="compliance_folder_hidden"
+                               id="folderHidden" {{ "checked" if config.compliance_folder_hidden }}>
+                        <label class="form-check-label small" for="folderHidden">Hide folder in mailbox</label>
+                        <div class="form-text">Hidden from user's view but accessible to eDiscovery.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-arrow-repeat me-2"></i>Sync Settings</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Chat Batch Size</label>
+                        <input type="number" class="form-control form-control-sm" name="chat_batch_size"
+                               value="{{ config.chat_batch_size }}" min="1" max="1000">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sync Schedule</label>
+                        <select class="form-select form-select-sm" name="sync_schedule_cron">
+                            {% set cron_options = [
+                                ("*/15 * * * *", "Every 15 minutes"),
+                                ("0 * * * *", "Every 1 hour"),
+                                ("0 */3 * * *", "Every 3 hours"),
+                                ("0 */6 * * *", "Every 6 hours"),
+                                ("0 */12 * * *", "Every 12 hours"),
+                                ("0 0 * * *", "Daily (midnight)"),
+                            ] %}
+                            {% for val, label in cron_options %}
+                            <option value="{{ val }}" {{ "selected" if config.sync_schedule_cron == val }}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="ingest_chat_content"
+                               id="ingestChat" {{ "checked" if config.ingest_chat_content }}>
+                        <label class="form-check-label small" for="ingestChat">Ingest chat content</label>
+                    </div>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" name="sync_enabled"
+                               id="syncEnabled" {{ "checked" if config.sync_enabled }}>
+                        <label class="form-check-label small" for="syncEnabled">Enable automatic sync</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-cloud me-2"></i>Azure Storage</div>
+                <div class="card-body">
+                    <div class="mb-0">
+                        <label class="form-label">
+                            Connection String
+                            <span class="badge bg-info text-dark ms-1 kv-badge" style="{{ '' if config.credential_storage == 'keyvault' else 'display:none' }}">
+                                <i class="bi bi-shield-lock"></i> Key Vault
+                            </span>
+                        </label>
+                        <input type="password" class="form-control form-control-sm mono kv-secret-field" name="storage_connection_string"
+                               value="{{ config.storage_connection_string }}"
+                               placeholder="DefaultEndpointsProtocol=https;AccountName=...">
+                        <div class="form-text">Required for sync state persistence (cursor tracking).</div>
+                    </div>
+                    <!-- Hidden field to preserve activity_batch_size -->
+                    <input type="hidden" name="activity_batch_size" value="{{ config.activity_batch_size }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Section: Branding & Theme ────────────────────────────── -->
+    <div class="d-flex align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-palette me-2 text-muted"></i>Branding & Theme</h5>
+        <hr class="flex-grow-1 ms-3">
+    </div>
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-brush me-2"></i>Appearance</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Application Name</label>
+                            <input type="text" class="form-control form-control-sm" name="brand_app_name"
+                                   value="{{ config.brand_app_name }}" placeholder="Claude Compliance" id="brandAppName">
+                            <div class="form-text">Displayed in the sidebar header.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Sidebar Color</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="color" class="form-control form-control-color" name="brand_sidebar_color"
+                                       value="{{ config.brand_sidebar_color }}" id="brandSidebarColor"
+                                       title="Choose sidebar color">
+                                <input type="text" class="form-control form-control-sm mono" style="width:90px"
+                                       id="sidebarColorText" value="{{ config.brand_sidebar_color }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Accent Color</label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="color" class="form-control form-control-color" name="brand_accent_color"
+                                       value="{{ config.brand_accent_color }}" id="brandAccentColor"
+                                       title="Choose accent color">
+                                <input type="text" class="form-control form-control-sm mono" style="width:90px"
+                                       id="accentColorText" value="{{ config.brand_accent_color }}">
+                            </div>
+                        </div>
+                    </div>
+                    <hr class="my-3">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-6">
+                            <label class="form-label">Logo</label>
+                            <input type="file" class="form-control form-control-sm" name="brand_logo"
+                                   accept=".png,.jpg,.jpeg,.svg,.gif,.webp,.ico" id="logoInput">
+                            <div class="form-text">PNG, JPG, SVG, or ICO. Displayed in the sidebar at 28px height.</div>
+                        </div>
+                        <div class="col-md-6">
+                            {% if config.brand_logo_filename %}
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="p-2 rounded" style="background:{{ config.brand_sidebar_color }}">
+                                    <img src="{{ url_for('static', filename='uploads/' + config.brand_logo_filename) }}"
+                                         alt="Logo" style="height:28px;max-width:120px" id="logoPreview">
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-danger" id="removeLogoBtn">
+                                    <i class="bi bi-trash me-1"></i>Remove
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="d-flex align-items-center gap-2 text-muted small" id="logoPreviewArea">
+                                <div class="p-2 rounded d-flex align-items-center justify-content-center"
+                                     style="background:{{ config.brand_sidebar_color }};width:48px;height:48px" id="logoPreviewBg">
+                                    <i class="bi bi-image text-white-50" style="font-size:20px" id="logoPlaceholder"></i>
+                                    <img src="" alt="Logo preview" style="height:28px;max-width:120px;display:none" id="logoPreview">
+                                </div>
+                                <span>No logo uploaded</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-eye me-2"></i>Preview</div>
+                <div class="card-body p-0">
+                    <div id="brandPreview" class="rounded-bottom" style="overflow:hidden">
+                        <div id="previewSidebar" style="background:{{ config.brand_sidebar_color }};padding:16px;min-height:160px">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                {% if config.brand_logo_filename %}
+                                <img src="{{ url_for('static', filename='uploads/' + config.brand_logo_filename) }}"
+                                     alt="" style="height:22px" id="previewLogo">
+                                {% else %}
+                                <i class="bi bi-shield-check text-white" id="previewIcon"></i>
+                                {% endif %}
+                                <span class="text-white fw-bold" style="font-size:13px" id="previewAppName">{{ config.brand_app_name }}</span>
+                            </div>
+                            <div class="small text-white-50 mb-3" style="font-size:11px">API Explorer &amp; Sync</div>
+                            <div class="rounded px-2 py-1 mb-1" id="previewActiveNav"
+                                 style="background:{{ config.brand_accent_color }};color:#fff;font-size:12px">
+                                <i class="bi bi-gear me-1"></i>Settings
+                            </div>
+                            <div class="rounded px-2 py-1 mb-1" style="color:rgba(255,255,255,0.6);font-size:12px">
+                                <i class="bi bi-chat-dots me-1"></i>Chats
+                            </div>
+                            <div class="rounded px-2 py-1" style="color:rgba(255,255,255,0.6);font-size:12px">
+                                <i class="bi bi-arrow-repeat me-1"></i>Sync Control
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Section: Display ─────────────────────────────────────── -->
+    <div class="d-flex align-items-center mb-3">
+        <h5 class="mb-0"><i class="bi bi-globe me-2 text-muted"></i>Display</h5>
+        <hr class="flex-grow-1 ms-3">
+    </div>
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-clock me-2"></i>Timezone</div>
+                <div class="card-body">
+                    <select class="form-select form-select-sm" name="display_timezone">
+                        {% set tz_options = [
+                            ("UTC", "UTC"),
+                            ("US/Eastern", "US Eastern (ET)"),
+                            ("US/Central", "US Central (CT)"),
+                            ("US/Mountain", "US Mountain (MT)"),
+                            ("US/Pacific", "US Pacific (PT)"),
+                            ("US/Alaska", "US Alaska (AKT)"),
+                            ("US/Hawaii", "US Hawaii (HT)"),
+                            ("Canada/Atlantic", "Canada Atlantic"),
+                            ("Canada/Newfoundland", "Canada Newfoundland"),
+                            ("Europe/London", "UK / London (GMT/BST)"),
+                            ("Europe/Paris", "Central Europe (CET)"),
+                            ("Europe/Berlin", "Germany / Berlin (CET)"),
+                            ("Europe/Athens", "Eastern Europe (EET)"),
+                            ("Asia/Dubai", "Dubai / Gulf (GST)"),
+                            ("Asia/Kolkata", "India (IST)"),
+                            ("Asia/Shanghai", "China (CST)"),
+                            ("Asia/Tokyo", "Japan (JST)"),
+                            ("Asia/Seoul", "South Korea (KST)"),
+                            ("Australia/Sydney", "Australia Eastern (AEST)"),
+                            ("Australia/Perth", "Australia Western (AWST)"),
+                            ("Pacific/Auckland", "New Zealand (NZST)"),
+                        ] %}
+                        {% for val, label in tz_options %}
+                        <option value="{{ val }}" {{ "selected" if config.display_timezone == val }}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">All dates and times across the app will display in this timezone.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Action Bar ───────────────────────────────────────────── -->
+    <div class="d-flex justify-content-between align-items-center mt-2 pt-3 border-top">
+        <a href="{{ url_for('settings.download_config') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-download me-1"></i>Download config.json
+        </a>
+        <button type="submit" class="btn btn-primary px-4">
+            <i class="bi bi-check-lg me-1"></i>Save Settings
+        </button>
+    </div>
+</form>
+
+<!-- ─── Section: User Archive Selection ──────────────────────── -->
+<div class="d-flex align-items-center mb-3 mt-5">
+    <h5 class="mb-0"><i class="bi bi-people me-2 text-muted"></i>User Archive Selection</h5>
+    <hr class="flex-grow-1 ms-3">
+</div>
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Select users for Exchange mailbox archiving</span>
+        <div class="d-flex align-items-center gap-3">
+            <span class="badge bg-primary" id="archiveTally">0 user(s) selected</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="loadUsersBtn">
+                <i class="bi bi-arrow-clockwise me-1"></i>Load Users
+            </button>
+            <button type="button" class="btn btn-sm btn-success d-none" id="saveUsersBtn">
+                <i class="bi bi-check-lg me-1"></i>Save Selection
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Only selected users will have chat data synced to their Exchange mailbox during automatic or manual sync runs.
+            If no users are selected and "Archive all" is off, no data will be synced.
+            {% if not config.graph_tenant_id %}
+            <br><span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Configure Microsoft Graph API above to see mailbox status.</span>
+            {% endif %}
+        </p>
+
+        <!-- Archive All toggle -->
+        <div class="form-check form-switch mb-3 p-3 rounded" style="background:#f8f9fa;border:1px solid #e9ecef">
+            <input class="form-check-input" type="checkbox" role="switch" id="archiveAllToggle"
+                   {{ "checked" if config.archive_all_users }}>
+            <label class="form-check-label fw-bold" for="archiveAllToggle">Archive all users (including future users)</label>
+            <div class="form-text">When enabled, all current and future Claude users are archived automatically.</div>
+        </div>
+
+        <div id="userTableArea">
+            <div class="text-center py-4 text-muted">
+                <i class="bi bi-people d-block" style="font-size:2rem"></i>
+                <p class="mt-2">Click "Load Users" to fetch Claude organization users.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ── Credential Storage toggle ────────────────────────────────
+    var credSelect = document.getElementById('credentialStorage');
+    var kvFields = document.getElementById('kvFields');
+    var kvBadges = document.querySelectorAll('.kv-badge');
+    var kvSecretFields = document.querySelectorAll('.kv-secret-field');
+
+    function updateCredUI() {
+        var isKV = credSelect.value === 'keyvault';
+        kvFields.style.display = isKV ? '' : 'none';
+        kvBadges.forEach(function(b) { b.style.display = isKV ? '' : 'none'; });
+        kvSecretFields.forEach(function(f) {
+            if (isKV) {
+                f.placeholder = 'Leave blank to keep current Key Vault value';
+            } else {
+                // Restore original placeholders
+                var name = f.getAttribute('name');
+                if (name === 'anthropic_compliance_access_key') f.placeholder = 'sk-ant-api01-...';
+                else if (name === 'graph_client_secret') f.placeholder = '';
+                else if (name === 'storage_connection_string') f.placeholder = 'DefaultEndpointsProtocol=https;AccountName=...';
+            }
+        });
+    }
+
+    credSelect.addEventListener('change', updateCredUI);
+
+    // ── Branding live preview ───────────────────────────────────
+    var sidebarColorPicker = document.getElementById('brandSidebarColor');
+    var sidebarColorText = document.getElementById('sidebarColorText');
+    var accentColorPicker = document.getElementById('brandAccentColor');
+    var accentColorText = document.getElementById('accentColorText');
+    var appNameInput = document.getElementById('brandAppName');
+    var previewSidebar = document.getElementById('previewSidebar');
+    var previewActiveNav = document.getElementById('previewActiveNav');
+    var previewAppName = document.getElementById('previewAppName');
+    var logoInput = document.getElementById('logoInput');
+    var logoPreviewBg = document.getElementById('logoPreviewBg');
+
+    function updatePreview() {
+        if (previewSidebar) previewSidebar.style.background = sidebarColorPicker.value;
+        if (previewActiveNav) previewActiveNav.style.background = accentColorPicker.value;
+        if (previewAppName) previewAppName.textContent = appNameInput.value || 'Claude Compliance';
+        if (logoPreviewBg) logoPreviewBg.style.background = sidebarColorPicker.value;
+    }
+
+    sidebarColorPicker.addEventListener('input', function() {
+        sidebarColorText.value = this.value;
+        updatePreview();
+    });
+    sidebarColorText.addEventListener('change', function() {
+        if (/^#[0-9a-fA-F]{6}$/.test(this.value)) {
+            sidebarColorPicker.value = this.value;
+            updatePreview();
+        }
+    });
+    accentColorPicker.addEventListener('input', function() {
+        accentColorText.value = this.value;
+        updatePreview();
+    });
+    accentColorText.addEventListener('change', function() {
+        if (/^#[0-9a-fA-F]{6}$/.test(this.value)) {
+            accentColorPicker.value = this.value;
+            updatePreview();
+        }
+    });
+    if (appNameInput) appNameInput.addEventListener('input', updatePreview);
+
+    // Logo file preview
+    if (logoInput) {
+        logoInput.addEventListener('change', function() {
+            var file = this.files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var preview = document.getElementById('logoPreview');
+                    var placeholder = document.getElementById('logoPlaceholder');
+                    var previewLogo = document.getElementById('previewLogo');
+                    var previewIcon = document.getElementById('previewIcon');
+                    if (preview) { preview.src = e.target.result; preview.style.display = ''; }
+                    if (placeholder) placeholder.style.display = 'none';
+                    if (previewLogo) { previewLogo.src = e.target.result; }
+                    else if (previewIcon) {
+                        var img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.alt = '';
+                        img.style.height = '22px';
+                        img.id = 'previewLogo';
+                        previewIcon.parentNode.replaceChild(img, previewIcon);
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    // Remove logo button
+    var removeLogoBtn = document.getElementById('removeLogoBtn');
+    if (removeLogoBtn) {
+        removeLogoBtn.addEventListener('click', function() {
+            var f = document.createElement('form');
+            f.method = 'POST';
+            f.action = '{{ url_for("settings.remove_logo") }}';
+            f.style.display = 'none';
+            document.body.appendChild(f);
+            f.submit();
+        });
+    }
+
+    // ── Test Connection buttons ─────────────────────────────────
+    document.querySelectorAll('.test-conn-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var testUrl = this.dataset.testUrl;
+            var mainForm = document.querySelector('form[action$="/settings/save"]');
+            var formData = new FormData(mainForm);
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Testing...';
+            fetch(mainForm.action, {method: 'POST', body: formData})
+                .then(function() {
+                    var f = document.createElement('form');
+                    f.method = 'POST'; f.action = testUrl; f.style.display = 'none';
+                    document.body.appendChild(f); f.submit();
+                })
+                .catch(function() {
+                    var f = document.createElement('form');
+                    f.method = 'POST'; f.action = testUrl; f.style.display = 'none';
+                    document.body.appendChild(f); f.submit();
+                });
+        });
+    });
+
+    // ── User Archive Selection ──────────────────────────────────
+    var loadBtn = document.getElementById('loadUsersBtn');
+    var saveBtn = document.getElementById('saveUsersBtn');
+    var tally = document.getElementById('archiveTally');
+    var tableArea = document.getElementById('userTableArea');
+    var archiveAllToggle = document.getElementById('archiveAllToggle');
+    var dirty = false;
+
+    function updateTally() {
+        if (archiveAllToggle.checked) {
+            tally.textContent = 'All users (auto)';
+            tally.className = 'badge bg-success';
+        } else {
+            var count = document.querySelectorAll('.user-archive-cb:checked').length;
+            if (count === 0) {
+                tally.textContent = 'No users selected';
+                tally.className = 'badge bg-secondary';
+            } else {
+                tally.textContent = count + ' user(s) selected';
+                tally.className = 'badge bg-primary';
+            }
+        }
+        if (dirty) saveBtn.classList.remove('d-none');
+    }
+
+    archiveAllToggle.addEventListener('change', function() {
+        dirty = true;
+        var disabled = this.checked;
+        document.querySelectorAll('.user-archive-cb').forEach(function(cb) { cb.disabled = disabled; });
+        var selectAll = document.getElementById('selectAllUsers');
+        if (selectAll) selectAll.disabled = disabled;
+        updateTally();
+    });
+
+    var settingsTM = null;
+
+    function renderUsers(data) {
+        var allUsers = data.users || [];
+        var graphOk = data.graph_configured;
+
+        if (!allUsers.length) {
+            tableArea.innerHTML = '<div class="text-center py-4 text-muted"><p>No users found.</p></div>';
+            return;
+        }
+
+        var html = '<div class="table-responsive"><table class="table table-sm table-hover mb-0" id="settingsUsersTable">';
+        html += '<thead><tr>';
+        html += '<th style="width:40px"><input type="checkbox" class="form-check-input" id="selectAllUsers"></th>';
+        html += '<th>User</th><th>Email</th><th>Role</th><th>Organization</th>';
+        html += '<th>Status</th>';
+        if (graphOk) html += '<th>Mailbox</th>';
+        html += '<th class="mono" style="font-size:11px">User ID</th>';
+        html += '</tr></thead><tbody>';
+
+        allUsers.forEach(function(u) {
+            var isDisabled = u.status && u.status !== 'active';
+            var noMailbox = graphOk && !u.has_mailbox;
+            var accountDisabled = graphOk && u.has_mailbox && u.account_enabled === false;
+            var rowStyle = '';
+            if (isDisabled || accountDisabled) rowStyle = ' style="font-style:italic;opacity:0.6"';
+            else if (noMailbox) rowStyle = ' style="opacity:0.5"';
+
+            html += '<tr' + rowStyle + '>';
+            html += '<td><input type="checkbox" class="form-check-input user-archive-cb" data-user-id="' + u.id + '" value="' + u.id + '"' + (u.selected ? ' checked' : '') + '></td>';
+            var displayName = u.name || u.graph_display_name || '';
+            html += '<td data-sort="' + esc(displayName) + '">' + esc(displayName);
+            if (isDisabled) html += ' <span class="badge bg-secondary" style="font-size:10px">removed</span>';
+            if (accountDisabled) html += ' <span class="badge bg-warning text-dark" style="font-size:10px">disabled</span>';
+            html += '</td>';
+            html += '<td data-sort="' + esc(u.email) + '">' + esc(u.email) + '</td>';
+            html += '<td data-sort="' + esc(u.role) + '">' + esc(u.role) + '</td>';
+            html += '<td data-sort="' + esc(u.org_name) + '">' + esc(u.org_name) + '</td>';
+            var statusBadge = '';
+            if (u.status === 'active') statusBadge = '<span class="badge bg-success">active</span>';
+            else if (u.status === 'deactivated') statusBadge = '<span class="badge bg-danger">deactivated</span>';
+            else if (u.status) statusBadge = '<span class="badge bg-secondary">' + esc(u.status) + '</span>';
+            else statusBadge = '<span class="badge bg-light text-dark">unknown</span>';
+            html += '<td data-sort="' + esc(u.status || 'unknown') + '">' + statusBadge + '</td>';
+            if (graphOk) {
+                var mbSort = u.has_mailbox ? (u.account_enabled ? 'active' : 'disabled') : 'none';
+                if (u.has_mailbox && u.account_enabled) html += '<td data-sort="' + mbSort + '"><span class="badge bg-success"><i class="bi bi-envelope-check"></i> active</span></td>';
+                else if (u.has_mailbox && !u.account_enabled) html += '<td data-sort="' + mbSort + '"><span class="badge bg-warning text-dark"><i class="bi bi-envelope-slash"></i> disabled</span></td>';
+                else html += '<td data-sort="' + mbSort + '"><span class="badge bg-light text-dark"><i class="bi bi-envelope-x"></i> none</span></td>';
+            }
+            html += '<td class="mono" style="font-size:11px" data-sort="' + esc(u.id) + '">' + esc(u.id) + '</td>';
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        tableArea.innerHTML = html;
+
+        // Initialize TableManager for settings user table
+        var tmCols = [
+            { key: 'select', label: '', sortable: false },
+            { key: 'user', label: 'User' },
+            { key: 'email', label: 'Email' },
+            { key: 'role', label: 'Role' },
+            { key: 'org', label: 'Organization' },
+            { key: 'status', label: 'Status' },
+        ];
+        if (graphOk) tmCols.push({ key: 'mailbox', label: 'Mailbox' });
+        tmCols.push({ key: 'uid', label: 'User ID' });
+
+        var stTable = document.getElementById('settingsUsersTable');
+        if (stTable) {
+            settingsTM = new TableManager(stTable, {
+                id: 'settings-users',
+                columns: tmCols,
+                defaultSort: { key: 'user', dir: 'asc' },
+            });
+            // Re-inject select-all checkbox (TM rebuilds <thead>)
+            var selectTh = stTable.querySelector('thead th[data-col-key="select"]');
+            if (selectTh) {
+                selectTh.innerHTML = '<input type="checkbox" class="form-check-input" id="selectAllUsers">';
+                selectTh.draggable = false;
+                selectTh.style.width = '40px';
+            }
+        }
+
+        document.querySelectorAll('.user-archive-cb').forEach(function(cb) {
+            cb.addEventListener('change', function() { dirty = true; updateSelectAllState(); updateTally(); });
+        });
+        var selectAll = document.getElementById('selectAllUsers');
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                var checked = this.checked;
+                document.querySelectorAll('.user-archive-cb').forEach(function(cb) { cb.checked = checked; });
+                dirty = true; updateTally();
+            });
+        }
+        if (archiveAllToggle.checked) {
+            document.querySelectorAll('.user-archive-cb').forEach(function(cb) { cb.disabled = true; });
+            if (selectAll) selectAll.disabled = true;
+        }
+        updateSelectAllState();
+        updateTally();
+    }
+
+    function updateSelectAllState() {
+        var all = document.querySelectorAll('.user-archive-cb');
+        var checked = document.querySelectorAll('.user-archive-cb:checked');
+        var selectAll = document.getElementById('selectAllUsers');
+        if (!selectAll) return;
+        selectAll.checked = all.length > 0 && all.length === checked.length;
+        selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+    }
+
+    loadBtn.addEventListener('click', function() {
+        tableArea.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-muted" role="status"></div><p class="text-muted small mt-2">Loading users...</p></div>';
+        loadBtn.disabled = true;
+        fetch('{{ url_for("settings.api_users") }}')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) tableArea.innerHTML = '<div class="alert alert-danger">' + esc(data.error) + '</div>';
+                else renderUsers(data);
+                loadBtn.disabled = false;
+            })
+            .catch(function(err) {
+                tableArea.innerHTML = '<div class="alert alert-danger">Failed: ' + esc(err.message) + '</div>';
+                loadBtn.disabled = false;
+            });
+    });
+
+    saveBtn.addEventListener('click', function() {
+        var archiveAll = archiveAllToggle.checked;
+        var ids = [];
+        document.querySelectorAll('.user-archive-cb:checked').forEach(function(cb) { ids.push(cb.value); });
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+        fetch('{{ url_for("settings.save_archive_users") }}', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({user_ids: ids, archive_all: archiveAll})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) { alert('Failed: ' + data.error); }
+            else {
+                dirty = false; saveBtn.classList.add('d-none');
+                var toast = document.createElement('div');
+                toast.className = 'alert alert-success alert-dismissible fade show position-fixed';
+                toast.style.cssText = 'top:80px;right:20px;z-index:9999;min-width:300px';
+                var msg = data.archive_all ? 'Archive all users enabled.' : 'Saved ' + data.count + ' user(s) for archiving.';
+                toast.innerHTML = '<i class="bi bi-check-circle me-1"></i>' + msg + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                document.body.appendChild(toast);
+                setTimeout(function() { toast.remove(); }, 4000);
+            }
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save Selection';
+        })
+        .catch(function(err) {
+            alert('Failed: ' + err.message);
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save Selection';
+        });
+    });
+});
+</script>
+{% endblock %}
