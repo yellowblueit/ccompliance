@@ -61,6 +61,7 @@ DEFAULT_CONFIG = {
     "entra_tenant_id": "",
     "entra_redirect_uri": "http://localhost:5000/getAToken",
     "flask_secret_key": "",
+    "graph_admin_consent_at": "",
 }
 
 ENV_MAP = {

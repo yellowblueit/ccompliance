@@ -591,6 +591,44 @@
                         </div>
                     </div>
 
+                    <!-- Admin Consent -->
+                    <hr class="my-3">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div>
+                            <span class="fw-semibold small">API Permissions</span>
+                            <div class="mt-1">
+                                <span class="badge bg-light text-dark border me-1">User.Read.All</span>
+                                <span class="badge bg-light text-dark border me-1">Mail.ReadWrite</span>
+                                <span class="badge bg-light text-dark border">Mail.Send</span>
+                            </div>
+                            {% if config.graph_admin_consent_at %}
+                            <div class="text-success small mt-1">
+                                <i class="bi bi-check-circle me-1"></i>Consent granted {{ config.graph_admin_consent_at[:10] }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div>
+                            {% if config.graph_tenant_id and config.graph_client_id %}
+                            <form method="POST" action="{{ url_for('settings.admin_consent') }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-shield-lock me-1"></i>
+                                    {{ 'Re-authorize' if config.graph_admin_consent_at else 'Grant Admin Consent' }}
+                                </button>
+                            </form>
+                            {% else %}
+                            <button type="button" class="btn btn-sm btn-outline-primary" disabled
+                                    title="Save Tenant ID and Client ID first">
+                                <i class="bi bi-shield-lock me-1"></i>Grant Admin Consent
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <p class="text-muted small mt-2 mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        A Global Admin must grant consent for the required permissions. Add
+                        <code>{{ url_for('settings.admin_consent_callback', _external=True) }}</code>
+                        as a Redirect URI in your Azure App Registration.
+                    </p>
                 </div>
             </div>
         </form>

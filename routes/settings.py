@@ -1,5 +1,7 @@
 import secrets
+from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlencode
 from flask import Blueprint, render_template, request, flash, redirect, url_for, \
     session, current_app, send_file, jsonify
 from werkzeug.utils import secure_filename
@@ -194,6 +196,56 @@ def test_graph():
         flash("Microsoft Graph API connected.", "success")
     except Exception as e:
         flash(f"Graph API failed: {e}", "danger")
+    return redirect(url_for("settings.index", tab="api_setup"))
+
+
+@settings_bp.route("/admin-consent", methods=["POST"])
+@login_required
+@require_permission("manage_settings")
+def admin_consent():
+    """Redirect Global Admin to Microsoft's admin consent endpoint."""
+    config = load_config()
+    tenant_id = config.get("graph_tenant_id", "").strip()
+    client_id = config.get("graph_client_id", "").strip()
+    if not tenant_id or not client_id:
+        flash("Tenant ID and Client ID must be saved before granting admin consent.", "warning")
+        return redirect(url_for("settings.index", tab="api_setup"))
+
+    # CSRF state token
+    state = secrets.token_urlsafe(32)
+    session["admin_consent_state"] = state
+
+    callback_url = url_for("settings.admin_consent_callback", _external=True)
+    params = urlencode({
+        "client_id": client_id,
+        "redirect_uri": callback_url,
+        "state": state,
+    })
+    consent_url = f"https://login.microsoftonline.com/{tenant_id}/adminconsent?{params}"
+    return redirect(consent_url)
+
+
+@settings_bp.route("/admin-consent/callback")
+@login_required
+def admin_consent_callback():
+    """Handle the redirect back from Microsoft's admin consent page."""
+    state = request.args.get("state", "")
+    expected = session.pop("admin_consent_state", None)
+    if not expected or state != expected:
+        flash("Admin consent failed: invalid state token. Please try again.", "danger")
+        return redirect(url_for("settings.index", tab="api_setup"))
+
+    error = request.args.get("error")
+    if error:
+        desc = request.args.get("error_description", error)
+        flash(f"Admin consent was not granted: {desc}", "danger")
+        return redirect(url_for("settings.index", tab="api_setup"))
+
+    # Success — save timestamp
+    now = datetime.now(timezone.utc).isoformat()
+    save_config({"graph_admin_consent_at": now})
+    current_app.config["APP_CONFIG"] = load_config()
+    flash("Admin consent granted successfully. API permissions are now authorized.", "success")
     return redirect(url_for("settings.index", tab="api_setup"))
 
 
