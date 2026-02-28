@@ -135,44 +135,28 @@ def _get_keyvault_client(vault_url, config=None):
 def _load_keyvault_secrets(config):
     """If keyvault mode is active, fetch secrets and overlay onto config.
 
-    Uses a thread with a timeout so that unreachable Key Vaults don't block
-    application startup (the Azure SDK can retry internally for minutes).
+    This is NOT called during startup — it is invoked explicitly from the
+    Settings UI when the user saves or tests Key Vault configuration.
     """
     if config.get("credential_storage") != "keyvault":
         return
     vault_url = config.get("keyvault_url", "").strip()
     if not vault_url:
         return
-
-    import threading
-
-    errors = []
-
-    def _fetch():
-        try:
-            client = _get_keyvault_client(vault_url, config)
-            for config_key, name_key in SECRET_NAME_MAP.items():
-                secret_name = config.get(name_key, "")
-                if not secret_name:
-                    continue
-                try:
-                    secret = client.get_secret(secret_name)
-                    if secret.value:
-                        config[config_key] = secret.value
-                except Exception as e:
-                    logger.warning("Key Vault: could not read '%s': %s", secret_name, e)
-        except Exception as e:
-            errors.append(e)
-
-    thread = threading.Thread(target=_fetch, daemon=True)
-    thread.start()
-    thread.join(timeout=15)  # 15 seconds max; don't block startup
-
-    if thread.is_alive():
-        logger.error("Key Vault connection timed out after 15s — skipping. "
-                      "Check that the vault URL and access policies are correct.")
-    elif errors:
-        logger.error("Key Vault connection failed: %s", errors[0])
+    try:
+        client = _get_keyvault_client(vault_url, config)
+        for config_key, name_key in SECRET_NAME_MAP.items():
+            secret_name = config.get(name_key, "")
+            if not secret_name:
+                continue
+            try:
+                secret = client.get_secret(secret_name)
+                if secret.value:
+                    config[config_key] = secret.value
+            except Exception as e:
+                logger.warning("Key Vault: could not read '%s': %s", secret_name, e)
+    except Exception as e:
+        logger.error("Key Vault connection failed: %s", e)
 
 
 def load_config():
@@ -196,7 +180,6 @@ def load_config():
             else:
                 config[key] = env_val
 
-    _load_keyvault_secrets(config)
     return config
 
 

@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from flask import Flask, redirect, url_for, session
-from config import load_config, _load_keyvault_secrets
+from config import load_config
 from auth import init_auth
 
 
@@ -71,20 +71,6 @@ def create_app():
 
             # Bootstrap admin: create Super Admin from env vars on first deploy
             _seed_admin_user(app, user_store)
-
-            # If Key Vault mode is on but secrets weren't loaded earlier
-            # (Entra creds live in AppSettingsStore, not config.json),
-            # retry now that the store is available.
-            if app_config.get("credential_storage") == "keyvault" and app_config.get("keyvault_url"):
-                try:
-                    auth_settings = app_settings_store.get_all_settings()
-                    for k in ("entra_tenant_id", "entra_client_id", "entra_client_secret"):
-                        if auth_settings.get(k):
-                            app_config[k] = auth_settings[k]
-                    _load_keyvault_secrets(app_config)
-                    app.logger.info("Key Vault secrets loaded via AppSettingsStore Entra creds.")
-                except Exception as e:
-                    app.logger.warning("Key Vault retry with Entra creds failed: %s", e)
         except Exception as e:
             app.logger.warning("Could not init Table Storage stores: %s", e)
             app.config["USER_STORE"] = None
