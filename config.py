@@ -234,6 +234,24 @@ def save_to_keyvault(vault_url, secrets, config=None):
             client.set_secret(name, value)
 
 
+def get_wizard_status(config=None):
+    """Return wizard step completion booleans derived from config values."""
+    cfg = config or load_config()
+    has_graph = all(cfg.get(k) for k in ("graph_tenant_id", "graph_client_id"))
+    kv_active = cfg.get("credential_storage") == "keyvault" and bool(cfg.get("keyvault_url"))
+    # In KV mode, graph_client_secret is in KV — step 1 is complete if tenant+client are set
+    if not kv_active:
+        has_graph = has_graph and bool(cfg.get("graph_client_secret"))
+    return {
+        "step1_complete": has_graph,
+        "step2_complete": bool(cfg.get("graph_admin_consent_at", "")),
+        "step3_complete": bool(cfg.get("anthropic_compliance_access_key")) or kv_active,
+        "step4_complete": kv_active,
+        "credential_storage": cfg.get("credential_storage", "local"),
+        "keyvault_url": cfg.get("keyvault_url", ""),
+    }
+
+
 def test_keyvault_connection(vault_url, config=None):
     """Test connectivity to Azure Key Vault. Returns (success, message)."""
     try:

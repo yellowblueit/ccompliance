@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
     session, current_app, send_file, jsonify
 from werkzeug.utils import secure_filename
 from config import load_config, save_config, test_keyvault_connection, \
-    CONFIG_FILE
+    save_to_keyvault, get_wizard_status, SECRET_NAME_MAP, CONFIG_FILE
 from routes import login_required, require_permission
 
 UPLOAD_DIR = Path(__file__).parent.parent / "static" / "uploads"
@@ -441,3 +441,175 @@ def download_config():
                          download_name="config.json", mimetype="application/json")
     flash("No config.json file exists yet.", "warning")
     return redirect(url_for("settings.index"))
+
+
+# ── Setup Wizard JSON API ────────────────────────────────────────────
+
+@settings_bp.route("/api/wizard/status")
+@login_required
+def wizard_status():
+    """Return wizard step completion state derived from current config."""
+    config = load_config()
+    return jsonify(get_wizard_status(config))
+
+
+@settings_bp.route("/api/wizard/test-graph", methods=["POST"])
+@login_required
+@require_permission("manage_settings")
+def wizard_test_graph():
+    """Test Graph API credentials without saving. Returns JSON."""
+    data = request.get_json(silent=True) or {}
+    tenant_id = data.get("graph_tenant_id", "").strip()
+    client_id = data.get("graph_client_id", "").strip()
+    client_secret = data.get("graph_client_secret", "").strip()
+    if not all([tenant_id, client_id, client_secret]):
+        return jsonify({"success": False, "message": "Tenant ID, Client ID, and Client Secret are all required."}), 400
+    try:
+        from clients.graph_client import GraphClient
+        client = GraphClient(tenant_id, client_id, client_secret)
+        client._ensure_token()
+        return jsonify({"success": True, "message": "Token acquired. Microsoft Graph API connected."})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+@settings_bp.route("/api/wizard/save-graph", methods=["POST"])
+@login_required
+@require_permission("manage_settings")
+def wizard_save_graph():
+    """Save Graph API credentials from wizard Step 1."""
+    data = request.get_json(silent=True) or {}
+    updates = {
+        "graph_tenant_id": data.get("graph_tenant_id", "").strip(),
+        "graph_client_id": data.get("graph_client_id", "").strip(),
+        "graph_client_secret": data.get("graph_client_secret", "").strip(),
+    }
+    save_config(updates)
+    current_app.config["APP_CONFIG"] = load_config()
+    return jsonify({"success": True, "message": "App registration credentials saved."})
+
+
+@settings_bp.route("/api/wizard/check-consent", methods=["POST"])
+@login_required
+def wizard_check_consent():
+    """Check if admin consent timestamp exists."""
+    config = load_config()
+    consent_at = config.get("graph_admin_consent_at", "")
+    if consent_at:
+        return jsonify({"success": True, "granted": True, "granted_at": consent_at})
+    return jsonify({"success": True, "granted": False})
+
+
+@settings_bp.route("/api/wizard/test-anthropic", methods=["POST"])
+@login_required
+@require_permission("manage_settings")
+def wizard_test_anthropic():
+    """Test Anthropic API credentials without saving. Returns JSON."""
+    data = request.get_json(silent=True) or {}
+    access_key = data.get("anthropic_compliance_access_key", "").strip()
+    base_url = data.get("anthropic_base_url", "https://api.anthropic.com").strip()
+    # If key not provided and KV mode is active, load from saved config
+    if not access_key:
+        config = load_config()
+        if config.get("credential_storage") == "keyvault":
+            from config import _load_keyvault_secrets
+            _load_keyvault_secrets(config)
+            access_key = config.get("anthropic_compliance_access_key", "")
+        else:
+            access_key = config.get("anthropic_compliance_access_key", "")
+    if not access_key:
+        return jsonify({"success": False, "message": "Access key is required."}), 400
+    try:
+        from clients.anthropic_client import AnthropicComplianceClient
+        client = AnthropicComplianceClient(access_key, base_url)
+        orgs = client.list_organizations()
+        count = len(orgs if isinstance(orgs, list) else orgs.get("data", []))
+        return jsonify({"success": True, "message": f"Connected. Found {count} organization(s).", "org_count": count})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+@settings_bp.route("/api/wizard/save-anthropic", methods=["POST"])
+@login_required
+@require_permission("manage_settings")
+def wizard_save_anthropic():
+    """Save Anthropic API credentials from wizard Step 3."""
+    data = request.get_json(silent=True) or {}
+    updates = {
+        "anthropic_compliance_access_key": data.get("anthropic_compliance_access_key", "").strip(),
+        "anthropic_base_url": data.get("anthropic_base_url", "https://api.anthropic.com").strip(),
+    }
+    save_config(updates)
+    current_app.config["APP_CONFIG"] = load_config()
+    return jsonify({"success": True, "message": "Anthropic API credentials saved."})
+
+
+@settings_bp.route("/api/wizard/test-keyvault", methods=["POST"])
+@login_required
+@require_permission("manage_settings")
+def wizard_test_keyvault():
+    """Test Key Vault connectivity without saving. Returns JSON."""
+    data = request.get_json(silent=True) or {}
+    vault_url = data.get("keyvault_url", "").strip()
+    if not vault_url:
+        return jsonify({"success": False, "message": "Key Vault URL is required."}), 400
+    config = load_config()
+    # Merge Entra creds from AppSettingsStore for local dev fallback
+    auth = _get_auth_settings()
+    for k in ("entra_tenant_id", "entra_client_id", "entra_client_secret"):
+        if auth.get(k):
+            config[k] = auth[k]
+    ok, msg = test_keyvault_connection(vault_url, config)
+    return jsonify({"success": ok, "message": msg})
+
+
+@settings_bp.route("/api/wizard/migrate-keyvault", methods=["POST"])
+@login_required
+@require_permission("manage_settings")
+def wizard_migrate_keyvault():
+    """Write secrets to Key Vault, switch to keyvault mode, strip secrets from config.json."""
+    data = request.get_json(silent=True) or {}
+    vault_url = data.get("keyvault_url", "").strip()
+    if not vault_url:
+        return jsonify({"success": False, "message": "Key Vault URL is required."}), 400
+
+    secret_names = {
+        "keyvault_secret_anthropic_key": data.get("keyvault_secret_anthropic_key", "anthropic-compliance-access-key").strip(),
+        "keyvault_secret_graph_secret": data.get("keyvault_secret_graph_secret", "graph-client-secret").strip(),
+        "keyvault_secret_storage_conn": data.get("keyvault_secret_storage_conn", "storage-connection-string").strip(),
+    }
+
+    config = load_config()
+    # Merge Entra creds for KV auth
+    auth = _get_auth_settings()
+    for k in ("entra_tenant_id", "entra_client_id", "entra_client_secret"):
+        if auth.get(k):
+            config[k] = auth[k]
+
+    # Build {kv_secret_name: secret_value} mapping
+    secrets_to_write = {}
+    for config_key, name_key in SECRET_NAME_MAP.items():
+        kv_name = secret_names.get(name_key, "") or config.get(name_key, "")
+        value = config.get(config_key, "")
+        if kv_name and value:
+            secrets_to_write[kv_name] = value
+
+    if not secrets_to_write:
+        return jsonify({"success": False, "message": "No secrets found to migrate. Configure API credentials first."})
+
+    try:
+        save_to_keyvault(vault_url, secrets_to_write, config)
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to write to Key Vault: {e}"})
+
+    # Switch config to keyvault mode (save_config will strip SECRET_KEYS from file)
+    kv_updates = {"credential_storage": "keyvault", "keyvault_url": vault_url}
+    kv_updates.update(secret_names)
+    save_config(kv_updates)
+    current_app.config["APP_CONFIG"] = load_config()
+
+    return jsonify({
+        "success": True,
+        "message": f"Migrated {len(secrets_to_write)} secret(s) to Key Vault. Local secrets removed.",
+        "migrated_count": len(secrets_to_write),
+    })
