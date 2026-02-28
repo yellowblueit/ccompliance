@@ -81,6 +81,7 @@
             { "name": "ADMIN_PASSWORD", "value": "[parameters('adminPassword')]" },
             { "name": "AzureWebJobsStorage", "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(variables('storageAccountId'), '2023-01-01').keys[0].value, ';EndpointSuffix=core.windows.net')]" },
             { "name": "SCM_DO_BUILD_DURING_DEPLOYMENT", "value": "true" },
+            { "name": "ENABLE_ORYX_BUILD", "value": "true" },
             { "name": "WEBSITE_HTTPLOGGING_RETENTION_DAYS", "value": "3" }
           ]
         }
