@@ -230,7 +230,7 @@
                         <div class="col-md-6">
                             <label class="form-label">Application Name</label>
                             <input type="text" class="form-control form-control-sm" name="brand_app_name"
-                                   value="{{ config.brand_app_name }}" placeholder="Claude Compliance" id="brandAppName">
+                                   value="{{ config.brand_app_name }}" placeholder="CCompliance" id="brandAppName">
                             <div class="form-text">Displayed in the sidebar header.</div>
                         </div>
                         <div class="col-md-3">
@@ -464,7 +464,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function updatePreview() {
         if (previewSidebar) previewSidebar.style.background = sidebarColorPicker.value;
         if (previewActiveNav) previewActiveNav.style.background = accentColorPicker.value;
-        if (previewAppName) previewAppName.textContent = appNameInput.value || 'Claude Compliance';
+        if (previewAppName) previewAppName.textContent = appNameInput.value || 'CCompliance';
         if (logoPreviewBg) logoPreviewBg.style.background = sidebarColorPicker.value;
     }
 

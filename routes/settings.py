@@ -64,7 +64,7 @@ def save():
 
     if tab == "general":
         updates = {
-            "brand_app_name": request.form.get("brand_app_name", "Claude Compliance").strip(),
+            "brand_app_name": request.form.get("brand_app_name", "CCompliance").strip(),
             "brand_sidebar_color": request.form.get("brand_sidebar_color", "#1a1a2e").strip(),
             "brand_accent_color": request.form.get("brand_accent_color", "#6b21a8").strip(),
             "display_timezone": request.form.get("display_timezone", "UTC").strip(),

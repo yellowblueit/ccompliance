@@ -42,7 +42,7 @@ DEFAULT_CONFIG = {
     "sync_enabled": False,
     "display_timezone": "UTC",
     # Branding & Theme
-    "brand_app_name": "Claude Compliance",
+    "brand_app_name": "CCompliance",
     "brand_sidebar_color": "#1a1a2e",
     "brand_accent_color": "#6b21a8",
     "brand_logo_filename": "",

@@ -146,10 +146,10 @@ def chat_update_to_mail_message(chat_data, new_messages, file_attachments=None, 
     m = {
         "subject": subj,
         "receivedDateTime": updated_at or created_at or datetime.now(timezone.utc).isoformat(),
-        "from": {"emailAddress": {"name": "Claude AI Compliance", "address": "claude-compliance@anthropic.com"}},
+        "from": {"emailAddress": {"name": "CCompliance", "address": "ccompliance@anthropic.com"}},
         "toRecipients": [{"emailAddress": {"name": user_email, "address": user_email}}],
         "body": {"contentType": "HTML", "content": body},
-        "categories": ["Claude AI Compliance", "Chat Record" if is_new else "Chat Update"],
+        "categories": ["CCompliance", "Chat Record" if is_new else "Chat Update"],
         "importance": "normal", "isRead": True,
     }
     if file_attachments:

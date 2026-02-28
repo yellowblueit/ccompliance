@@ -1,5 +1,5 @@
 """
-Flask application: Claude Compliance API Explorer & Sync
+Flask application: CCompliance API Explorer & Sync
 """
 import os
 import ssl
@@ -143,7 +143,7 @@ def create_app():
             "display_timezone": tz_name,
             "tz_abbr": tz_abbr,
             "brand": {
-                "app_name": cfg.get("brand_app_name", "Claude Compliance"),
+                "app_name": cfg.get("brand_app_name", "CCompliance"),
                 "sidebar_color": cfg.get("brand_sidebar_color", "#1a1a2e"),
                 "accent_color": cfg.get("brand_accent_color", "#6b21a8"),
                 "logo_filename": cfg.get("brand_logo_filename", ""),

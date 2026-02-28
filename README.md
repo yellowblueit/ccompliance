@@ -1,4 +1,4 @@
-# Claude Compliance API Explorer & Purview Sync
+# CCompliance API Explorer & Purview Sync
 
 A Flask web application that provides a full interactive GUI for the **Anthropic Compliance API** (Rev E) and optionally syncs compliance data to **Microsoft Purview** via the Graph API. Secured with **Microsoft Entra ID** authentication.
 
@@ -36,7 +36,7 @@ A Flask web application that provides a full interactive GUI for the **Anthropic
 ## Architecture
 
 ```
-Claude Compliance API/
+CCompliance/
 ├── app.py                          # Flask app factory & entry point
 ├── config.py                       # Config loader (config.json + env fallbacks)
 ├── auth.py                         # Entra ID authentication setup
@@ -163,7 +163,7 @@ The app starts at **http://localhost:5000**. In dev mode (no Entra ID configured
 az webapp create \
   --resource-group your-rg \
   --plan your-plan \
-  --name claude-compliance \
+  --name ccompliance \
   --runtime "PYTHON:3.12"
 ```
 
@@ -173,19 +173,19 @@ Set these in **Azure Portal > App Service > Configuration > Application settings
 
 ```bash
 # Required
-az webapp config appsettings set --name claude-compliance --resource-group your-rg --settings \
+az webapp config appsettings set --name ccompliance --resource-group your-rg --settings \
   ANTHROPIC_COMPLIANCE_ACCESS_KEY="sk-ant-api01-..." \
   FLASK_SECRET_KEY="$(openssl rand -hex 32)"
 
 # Entra ID authentication
-az webapp config appsettings set --name claude-compliance --resource-group your-rg --settings \
+az webapp config appsettings set --name ccompliance --resource-group your-rg --settings \
   ENTRA_CLIENT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \
   ENTRA_CLIENT_SECRET="your-client-secret" \
   ENTRA_TENANT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \
-  ENTRA_REDIRECT_URI="https://claude-compliance.azurewebsites.net/getAToken"
+  ENTRA_REDIRECT_URI="https://ccompliance.azurewebsites.net/getAToken"
 
 # Purview sync (optional)
-az webapp config appsettings set --name claude-compliance --resource-group your-rg --settings \
+az webapp config appsettings set --name ccompliance --resource-group your-rg --settings \
   GRAPH_TENANT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \
   GRAPH_CLIENT_ID="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \
   GRAPH_CLIENT_SECRET="your-graph-secret" \
@@ -196,7 +196,7 @@ az webapp config appsettings set --name claude-compliance --resource-group your-
 ### 3. Set the startup command
 
 ```bash
-az webapp config set --name claude-compliance --resource-group your-rg \
+az webapp config set --name ccompliance --resource-group your-rg \
   --startup-file "startup.sh"
 ```
 
@@ -210,14 +210,14 @@ gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 1 app:app
 Upload the project files via ZIP deploy, Git deploy, or VS Code Azure extension:
 
 ```bash
-az webapp deploy --resource-group your-rg --name claude-compliance \
+az webapp deploy --resource-group your-rg --name ccompliance \
   --src-path ./deploy.zip --type zip
 ```
 
 ### 5. Register Entra ID app
 
 1. Go to **Azure Portal > Entra ID > App registrations > New registration**
-2. Set redirect URI to `https://claude-compliance.azurewebsites.net/getAToken`
+2. Set redirect URI to `https://ccompliance.azurewebsites.net/getAToken`
 3. Under **API permissions**, add `User.Read` (Microsoft Graph)
 4. Under **Certificates & secrets**, create a client secret
 5. Copy the **Application (client) ID**, **Directory (tenant) ID**, and **Client secret** to your App Settings
