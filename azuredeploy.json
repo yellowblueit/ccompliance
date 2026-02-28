@@ -72,7 +72,6 @@
         "httpsOnly": true,
         "siteConfig": {
           "linuxFxVersion": "PYTHON|3.12",
-          "appCommandLine": "gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 1 app:app",
           "alwaysOn": true,
           "ftpsState": "Disabled",
           "minTlsVersion": "1.2",
