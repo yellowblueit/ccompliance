@@ -72,7 +72,7 @@
         "httpsOnly": true,
         "siteConfig": {
           "linuxFxVersion": "PYTHON|3.12",
-          "appCommandLine": "bash -c 'cd /home/site/wwwroot; if [ -f app.py ]; then gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 1 app:app; else python3 -m http.server $PORT; fi'",
+          "appCommandLine": "gunicorn --bind=0.0.0.0:$PORT --timeout 600 --workers 1 app:app",
           "alwaysOn": true,
           "ftpsState": "Disabled",
           "minTlsVersion": "1.2",
@@ -85,19 +85,6 @@
             { "name": "WEBSITE_HTTPLOGGING_RETENTION_DAYS", "value": "3" }
           ]
         }
-      }
-    },
-    {
-      "type": "Microsoft.Web/sites/sourcecontrols",
-      "apiVersion": "2023-01-01",
-      "name": "[concat(parameters('appName'), '/web')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Web/sites', parameters('appName'))]"
-      ],
-      "properties": {
-        "repoUrl": "https://github.com/yellowblueit/ccompliance",
-        "branch": "main",
-        "isManualIntegration": true
       }
     }
   ],
