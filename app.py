@@ -45,6 +45,15 @@ def _seed_admin_user(app, user_store):
     })
     app.logger.info("Bootstrap Super Admin user created: %s", admin_user)
 
+    # Enable local authentication so the admin can actually log in
+    settings_store = app.config.get("APP_SETTINGS_STORE")
+    if settings_store:
+        try:
+            settings_store.set_setting("local_auth_enabled", "true")
+            app.logger.info("Local authentication enabled (bootstrap).")
+        except Exception as e:
+            app.logger.warning("Could not enable local auth in settings store: %s", e)
+
 
 def create_app():
     app = Flask(__name__)

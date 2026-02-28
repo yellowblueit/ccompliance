@@ -219,6 +219,37 @@
                     </div>
                 </div>
                 <div class="card-body toggle-section" id="entraFields" {% if not entra_on %}style="display:none"{% endif %}>
+
+                    <!-- Setup Guide (collapsible) -->
+                    {% set has_entra_creds = auth_settings.get('entra_tenant_id','') and auth_settings.get('entra_client_id','') %}
+                    <div class="mb-3">
+                        <a class="text-decoration-none fw-semibold small" data-bs-toggle="collapse" href="#entraSetupGuide" role="button"
+                           aria-expanded="{{ 'false' if has_entra_creds else 'true' }}">
+                            <i class="bi bi-book me-1"></i>{{ 'Setup Guide' if has_entra_creds else 'Setup Guide — Follow these steps to configure Entra ID' }}
+                            <i class="bi bi-chevron-down ms-1" style="font-size:.7rem"></i>
+                        </a>
+                        <div class="collapse {{ '' if has_entra_creds else 'show' }}" id="entraSetupGuide">
+                            <div class="mt-2 p-3 rounded" style="background:#f8f9fa;border:1px solid #e9ecef">
+                                <ol class="mb-0 small" style="padding-left:1.2rem;line-height:1.9">
+                                    <li>Go to <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">
+                                        Entra ID → App registrations <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i></a> and click <strong>New registration</strong>.</li>
+                                    <li>Name it (e.g. <em>CCompliance</em>), choose <strong>Single tenant</strong>, and set the <strong>Redirect URI</strong> to <strong>Web</strong> with this value:
+                                        <div class="input-group input-group-sm mt-1 mb-1" style="max-width:520px">
+                                            <input type="text" class="form-control mono bg-white" id="entraRedirectUriDisplay"
+                                                   value="{{ request.host_url.rstrip('/') }}/getAToken" readonly>
+                                            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('entraRedirectUriDisplay')" title="Copy">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </div>
+                                    </li>
+                                    <li>Click <strong>Register</strong>. On the overview page, copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> into the fields below.</li>
+                                    <li>Go to <strong>Certificates &amp; secrets → New client secret</strong>. Copy the <strong>Value</strong> (not the Secret ID) into the Client Secret field below.</li>
+                                    <li>Toggle the switch above to <strong>Enabled</strong>, fill in all fields, and click <strong>Save Authentication Settings</strong>.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Tenant ID</label>
@@ -237,18 +268,18 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Redirect URI</label>
-                            <input type="text" class="form-control form-control-sm mono" name="entra_redirect_uri"
-                                   value="{{ auth_settings.get('entra_redirect_uri', config.get('entra_redirect_uri','http://localhost:5000/getAToken')) }}">
+                            <input type="text" class="form-control form-control-sm mono" name="entra_redirect_uri" id="entraRedirectUriField"
+                                   value="{{ auth_settings.get('entra_redirect_uri', '') or (request.host_url.rstrip('/') + '/getAToken') }}">
+                            <div class="form-text">Must match the Redirect URI in your Azure App Registration.</div>
                         </div>
                     </div>
                     <div class="mt-3 d-flex align-items-center gap-3">
                         <button type="button" class="btn btn-sm btn-outline-success" id="testEntraBtn">
-                            <i class="bi bi-lightning me-1"></i>Test Entra Connection
+                            <i class="bi bi-lightning me-1"></i>Test Connection
                         </button>
                         <small class="text-muted">
                             <i class="bi bi-info-circle me-1"></i>
-                            Define <strong>App Roles</strong> in your Entra App Registration matching role names below.
-                            Changes take effect on next login.
+                            Optionally define <strong>App Roles</strong> in your Entra App Registration to map users to roles automatically.
                         </small>
                     </div>
                 </div>
@@ -870,6 +901,16 @@ const PERM_LABELS = {
     view_organizations: "View Organizations", manage_settings: "Manage Settings",
     manage_sync: "Manage Sync", manage_users: "Manage Users", manage_roles: "Manage Roles"
 };
+
+// ── Copy to clipboard ────────────────────────────────────────────────
+function copyToClipboard(inputId) {
+    var el = document.getElementById(inputId);
+    if (!el) return;
+    navigator.clipboard.writeText(el.value).then(function() {
+        var btn = el.nextElementSibling;
+        if (btn) { btn.innerHTML = '<i class="bi bi-check-lg text-success"></i>'; setTimeout(function(){ btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500); }
+    });
+}
 
 // ── Toggle helpers ───────────────────────────────────────────────────
 function toggleSection(sectionId, show) {
