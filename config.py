@@ -96,13 +96,20 @@ logger = logging.getLogger(__name__)
 def _get_keyvault_client(vault_url, config=None):
     """Create a Key Vault SecretClient.
 
-    Uses the Entra ID app registration credentials if available (works locally
-    and in Azure). Falls back to DefaultAzureCredential (Managed Identity, CLI, etc.).
+    On Azure App Service, uses the system-assigned Managed Identity (fast, no
+    credentials needed).  Locally, falls back to Entra/Graph client credentials
+    or DefaultAzureCredential.
     """
     from azure.keyvault.secrets import SecretClient
 
-    # Try Entra ID client credentials first, falling back to Graph creds
-    # (same app registration, just stored under different config key names)
+    # On Azure App Service the Managed Identity is the simplest and most
+    # reliable way to reach Key Vault (the ARM template grants it access).
+    if os.environ.get("WEBSITE_SITE_NAME"):
+        from azure.identity import ManagedIdentityCredential
+        credential = ManagedIdentityCredential()
+        return SecretClient(vault_url=vault_url, credential=credential)
+
+    # Local dev: try Entra ID / Graph client credentials, then DefaultAzureCredential
     cfg = config or {}
     tenant = (cfg.get("entra_tenant_id")
               or os.environ.get("ENTRA_TENANT_ID", "")
