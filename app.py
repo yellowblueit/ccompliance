@@ -16,8 +16,38 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from flask import Flask, redirect, url_for, session
-from config import load_config, _load_keyvault_secrets
+from config import load_config, _load_keyvault_secrets, set_cloud_store, \
+    load_config_from_cloud, _persist_to_cloud, _CLOUD_PERSIST_KEYS, ENV_MAP
 from auth import init_auth
+
+
+def _sync_logo(store, app_config, log):
+    """Restore logo from cloud if lost, or seed cloud from disk on first run."""
+    logo = app_config.get("brand_logo_filename", "")
+    if not logo:
+        return
+    from pathlib import Path
+    import base64
+    logo_path = Path(__file__).parent / "static" / "uploads" / logo
+    logo_b64 = store.get_setting("cfg_logo_data")
+
+    if logo_path.exists() and not logo_b64:
+        # First run: seed logo to cloud store
+        try:
+            data = logo_path.read_bytes()
+            if len(data) < 48_000:
+                store.set_setting("cfg_logo_data", base64.b64encode(data).decode())
+                log.info("Seeded logo '%s' to cloud store.", logo)
+        except Exception as e:
+            log.warning("Could not seed logo to cloud store: %s", e)
+    elif not logo_path.exists() and logo_b64:
+        # Redeployment: restore logo from cloud
+        try:
+            logo_path.parent.mkdir(parents=True, exist_ok=True)
+            logo_path.write_bytes(base64.b64decode(logo_b64))
+            log.info("Restored logo '%s' from cloud store.", logo)
+        except Exception as e:
+            log.warning("Could not restore logo from cloud store: %s", e)
 
 
 def _seed_admin_user(app, user_store):
@@ -86,6 +116,27 @@ def create_app():
             app.config["USER_STORE"] = user_store
             app.config["APP_SETTINGS_STORE"] = app_settings_store
             app.logger.info("UserStore and AppSettingsStore initialised.")
+
+            # Register cloud store for cross-deployment config persistence
+            set_cloud_store(app_settings_store)
+
+            # Overlay cloud-persisted config (restores settings after redeployment)
+            cloud_cfg = load_config_from_cloud(app_settings_store)
+            if cloud_cfg:
+                for key, value in cloud_cfg.items():
+                    env_name = ENV_MAP.get(key)
+                    if env_name and os.environ.get(env_name) is not None:
+                        continue   # env var takes priority
+                    app_config[key] = value
+            else:
+                # First run: seed cloud store from current config so existing
+                # settings survive future redeployments
+                _persist_to_cloud({k: v for k, v in app_config.items()
+                                   if k in _CLOUD_PERSIST_KEYS and v})
+
+            # Restore logo file if it was lost but is stored in the cloud,
+            # or seed the logo to cloud on first run
+            _sync_logo(app_settings_store, app_config, app.logger)
 
             # Bootstrap admin: create Super Admin from env vars on first deploy
             _seed_admin_user(app, user_store)

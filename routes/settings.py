@@ -86,6 +86,16 @@ def save():
                 saved_name = f"logo.{ext}"
                 logo.save(str(UPLOAD_DIR / saved_name))
                 updates["brand_logo_filename"] = saved_name
+                # Persist logo to cloud store for redeployment recovery
+                store = current_app.config.get("APP_SETTINGS_STORE")
+                if store:
+                    try:
+                        import base64
+                        data = (UPLOAD_DIR / saved_name).read_bytes()
+                        if len(data) < 48_000:  # Table Storage 64KB limit
+                            store.set_setting("cfg_logo_data", base64.b64encode(data).decode())
+                    except Exception:
+                        pass
 
     elif tab == "anthropic":
         updates = {
@@ -428,6 +438,13 @@ def remove_logo():
         if logo_path.exists():
             logo_path.unlink()
     save_config({"brand_logo_filename": ""})
+    # Remove logo data from cloud store
+    store = current_app.config.get("APP_SETTINGS_STORE")
+    if store:
+        try:
+            store.delete_setting("cfg_logo_data")
+        except Exception:
+            pass
     current_app.config["APP_CONFIG"] = load_config()
     flash("Logo removed.", "success")
     return redirect(url_for("settings.index", tab="general"))

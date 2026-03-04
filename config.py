@@ -93,6 +93,98 @@ ENV_MAP = {
 
 logger = logging.getLogger(__name__)
 
+# ── Cloud persistence (Azure Table Storage) ───────────────────────────
+# Non-secret config keys persisted to AppSettingsStore so settings survive
+# redeployment even if config.json is wiped.  Stored with a "cfg_" prefix
+# to avoid colliding with auth settings already in the same table.
+
+_cloud_store = None   # set once by app.py after AppSettingsStore init
+
+
+def set_cloud_store(store):
+    """Register the AppSettingsStore for cross-deployment config persistence."""
+    global _cloud_store
+    _cloud_store = store
+
+
+_CLOUD_PERSIST_KEYS = {
+    "anthropic_base_url",
+    "graph_tenant_id",
+    "graph_client_id",
+    "compliance_mailbox",
+    "compliance_folder_name",
+    "compliance_folder_hidden",
+    "activity_batch_size",
+    "chat_batch_size",
+    "ingest_chat_content",
+    "sync_schedule_cron",
+    "sync_enabled",
+    "display_timezone",
+    "brand_app_name",
+    "brand_sidebar_color",
+    "brand_accent_color",
+    "brand_logo_filename",
+    "archive_all_users",
+    "archive_user_ids",
+    "credential_storage",
+    "keyvault_url",
+    "keyvault_secret_anthropic_key",
+    "keyvault_secret_graph_secret",
+    "keyvault_secret_storage_conn",
+    "graph_admin_consent_at",
+}
+
+
+def _persist_to_cloud(updates):
+    """Write eligible config keys to the cloud store."""
+    if not _cloud_store:
+        return
+    for key, value in updates.items():
+        if key not in _CLOUD_PERSIST_KEYS:
+            continue
+        try:
+            if isinstance(value, (list, dict)):
+                _cloud_store.set_setting(f"cfg_{key}", json.dumps(value))
+            elif isinstance(value, bool):
+                _cloud_store.set_setting(f"cfg_{key}", "true" if value else "false")
+            else:
+                _cloud_store.set_setting(f"cfg_{key}", str(value))
+        except Exception as e:
+            logger.warning("Could not persist '%s' to cloud: %s", key, e)
+
+
+def load_config_from_cloud(store=None):
+    """Load persisted config from AppSettingsStore.  Returns a dict."""
+    s = store or _cloud_store
+    if not s:
+        return {}
+    try:
+        all_settings = s.get_all_settings()
+    except Exception as e:
+        logger.warning("Could not read cloud config: %s", e)
+        return {}
+
+    result = {}
+    for raw_key, raw_value in all_settings.items():
+        if not raw_key.startswith("cfg_"):
+            continue
+        key = raw_key[4:]  # strip "cfg_" prefix
+        if key not in DEFAULT_CONFIG:
+            continue
+        default = DEFAULT_CONFIG[key]
+        try:
+            if isinstance(default, bool):
+                result[key] = raw_value.lower() in ("true", "1", "yes")
+            elif isinstance(default, int):
+                result[key] = int(raw_value)
+            elif isinstance(default, list):
+                result[key] = json.loads(raw_value)
+            else:
+                result[key] = raw_value
+        except (ValueError, TypeError):
+            result[key] = raw_value
+    return result
+
 
 def _get_keyvault_client(vault_url, config=None):
     """Create a Key Vault SecretClient.
@@ -218,6 +310,9 @@ def save_config(updates: dict):
 
     with open(CONFIG_FILE, "w") as f:
         json.dump(file_config, f, indent=2)
+
+    # Also persist to cloud store (survives redeployment)
+    _persist_to_cloud(updates)
 
 
 def save_to_keyvault(vault_url, secrets, config=None):
