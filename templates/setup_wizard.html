@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Wizard — {{ brand.app_name if brand else 'CCompliance' }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; }
+        .wizard-container { max-width: 740px; margin: 40px auto; }
+        .wizard-header {
+            background: {{ brand.sidebar_color if brand else '#1a1a2e' }};
+            color: #fff;
+            border-radius: 12px 12px 0 0;
+            padding: 28px 32px 20px;
+        }
+        .wizard-header h4 { margin-bottom: 2px; }
+        .wizard-body { background: #fff; border-radius: 0 0 12px 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); }
+
+        /* Progress dots */
+        .progress-dots { display: flex; gap: 8px; align-items: center; justify-content: center; padding: 20px 0 8px; }
+        .progress-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #dee2e6; transition: all .3s;
+        }
+        .progress-dot.active { background: {{ brand.accent_color if brand else '#195483' }}; transform: scale(1.3); }
+        .progress-dot.complete { background: #16a34a; }
+        .progress-line { width: 32px; height: 2px; background: #dee2e6; transition: background .3s; }
+        .progress-line.complete { background: #16a34a; }
+
+        /* Step panels */
+        .step-panel { display: none; padding: 24px 32px 16px; }
+        .step-panel.active { display: block; }
+        .step-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; }
+        .step-subtitle { color: #6c757d; font-size: .85rem; margin-bottom: 20px; }
+
+        /* Navigation */
+        .wizard-nav { padding: 12px 32px 24px; display: flex; justify-content: space-between; align-items: center; }
+        .result-msg { font-size: 13px; margin-top: 8px; }
+        .result-ok { color: #16a34a; }
+        .result-err { color: #dc2626; }
+        .mono { font-family: monospace, monospace; }
+        .guide-box { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+        .guide-box ol { padding-left: 1.2rem; line-height: 1.9; margin-bottom: 0; }
+        .auth-option { border: 2px solid #dee2e6; border-radius: 8px; padding: 16px; cursor: pointer; transition: all .2s; }
+        .auth-option:hover { border-color: #adb5bd; }
+        .auth-option.selected { border-color: {{ brand.accent_color if brand else '#195483' }}; background: #f0f4ff; }
+        .summary-item { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+        .summary-item:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+<div class="wizard-container">
+    <div class="wizard-header">
+        {% if brand and brand.logo_filename %}
+        <img src="/static/uploads/{{ brand.logo_filename }}" alt="" style="height:28px;margin-bottom:10px;display:block">
+        {% else %}
+        <i class="bi bi-shield-check fs-3 d-block mb-2"></i>
+        {% endif %}
+        <h4>{{ brand.app_name if brand else 'CCompliance' }} Setup</h4>
+        <small style="opacity:.75">Let's configure your deployment</small>
+    </div>
+    <div class="wizard-body">
+        <!-- Progress Dots -->
+        <div class="progress-dots">
+            <div class="progress-dot" id="dot-1"></div>
+            <div class="progress-line" id="line-1"></div>
+            <div class="progress-dot" id="dot-2"></div>
+            <div class="progress-line" id="line-2"></div>
+            <div class="progress-dot" id="dot-3"></div>
+            <div class="progress-line" id="line-3"></div>
+            <div class="progress-dot" id="dot-4"></div>
+            <div class="progress-line" id="line-4"></div>
+            <div class="progress-dot" id="dot-5"></div>
+        </div>
+        <div class="text-center text-muted small pb-2" id="stepLabel">Step 1 of 5</div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- STEP 1: Azure App Registration (Graph API)                 -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div class="step-panel" id="step-1">
+            <div class="step-title"><i class="bi bi-microsoft me-2"></i>Azure App Registration</div>
+            <div class="step-subtitle">Register an app in Microsoft Entra ID for Graph API access and (optionally) SSO.</div>
+
+            <details class="mb-3" id="step1Guide" {{ '' if config.graph_tenant_id and config.graph_client_id else 'open' }}>
+                <summary class="fw-semibold small text-primary" style="cursor:pointer">
+                    <i class="bi bi-book me-1"></i>Setup Instructions
+                </summary>
+                <div class="guide-box mt-2 small">
+                    <ol>
+                        <li>Go to <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">
+                            Entra ID &rarr; App registrations <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i></a> and click <strong>New registration</strong>.</li>
+                        <li>Name: <em>CCompliance</em>, <strong>Single tenant</strong>, Redirect URI type <strong>Web</strong>:
+                            <div class="input-group input-group-sm mt-1 mb-1" style="max-width:520px">
+                                <input type="text" class="form-control mono bg-white" id="wizUri1"
+                                       value="{{ entra_redirect_uri }}" readonly>
+                                <button class="btn btn-outline-secondary" type="button" onclick="copyField('wizUri1')" title="Copy">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                            Also add a second Redirect URI:
+                            <div class="input-group input-group-sm mt-1 mb-1" style="max-width:520px">
+                                <input type="text" class="form-control mono bg-white" id="wizUri2"
+                                       value="{{ consent_callback_url }}" readonly>
+                                <button class="btn btn-outline-secondary" type="button" onclick="copyField('wizUri2')" title="Copy">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </li>
+                        <li>Click <strong>Register</strong>. Copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong>.</li>
+                        <li>Go to <strong>Certificates &amp; secrets &rarr; New client secret</strong>. Copy the <strong>Value</strong> (not the Secret ID).</li>
+                        <li>Add <strong>API permissions &rarr; Microsoft Graph &rarr; Application permissions</strong>:
+                            <span class="badge bg-light text-dark border">User.Read.All</span>
+                            <span class="badge bg-light text-dark border">Mail.ReadWrite</span>
+                            <span class="badge bg-light text-dark border">Mail.Send</span>
+                        </li>
+                    </ol>
+                </div>
+            </details>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Tenant ID</label>
+                    <input type="text" class="form-control form-control-sm mono" id="wiz_graph_tenant_id"
+                           value="{{ config.graph_tenant_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Client ID</label>
+                    <input type="text" class="form-control form-control-sm mono" id="wiz_graph_client_id"
+                           value="{{ config.graph_client_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Client Secret</label>
+                    <input type="password" class="form-control form-control-sm mono" id="wiz_graph_client_secret"
+                           value="{{ config.graph_client_secret }}" placeholder="Secret value from Entra ID">
+                </div>
+            </div>
+            <div class="mt-3 d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-outline-success" id="testGraphBtn">
+                    <i class="bi bi-lightning me-1"></i>Test Connection
+                </button>
+            </div>
+            <div id="result1"></div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- STEP 2: Anthropic Compliance API                           -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div class="step-panel" id="step-2">
+            <div class="step-title"><i class="bi bi-key me-2"></i>Anthropic Compliance API</div>
+            <div class="step-subtitle">Connect to your organization's Anthropic Compliance API for activity and chat data.</div>
+
+            <details class="mb-3" {{ '' if config.anthropic_compliance_access_key else 'open' }}>
+                <summary class="fw-semibold small text-primary" style="cursor:pointer">
+                    <i class="bi bi-book me-1"></i>Where to find your key
+                </summary>
+                <div class="guide-box mt-2 small">
+                    <ol>
+                        <li>Log in to <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i></a></li>
+                        <li>Navigate to <strong>Settings &rarr; Compliance API</strong>.</li>
+                        <li>Generate or copy your <strong>Compliance Access Key</strong>.</li>
+                    </ol>
+                </div>
+            </details>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Compliance Access Key</label>
+                    <input type="password" class="form-control form-control-sm mono" id="wiz_anthropic_key"
+                           value="{{ config.anthropic_compliance_access_key }}" placeholder="sk-ant-api01-...">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Base URL</label>
+                    <input type="text" class="form-control form-control-sm mono" id="wiz_anthropic_base_url"
+                           value="{{ config.anthropic_base_url or 'https://api.anthropic.com' }}">
+                </div>
+            </div>
+            <div class="mt-3 d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-outline-success" id="testAnthropicBtn">
+                    <i class="bi bi-lightning me-1"></i>Test Connection
+                </button>
+            </div>
+            <div id="result2"></div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- STEP 3: Azure Key Vault (optional)                         -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div class="step-panel" id="step-3">
+            <div class="step-title"><i class="bi bi-safe2 me-2"></i>Azure Key Vault <span class="badge bg-secondary ms-2" style="font-size:10px">Optional</span></div>
+            <div class="step-subtitle">Store API keys securely in Azure Key Vault using managed identity. You can skip this step.</div>
+
+            <details class="mb-3" {{ '' if config.credential_storage == 'keyvault' else 'open' }}>
+                <summary class="fw-semibold small text-primary" style="cursor:pointer">
+                    <i class="bi bi-book me-1"></i>Setup Instructions
+                </summary>
+                <div class="guide-box mt-2 small">
+                    <ol>
+                        <li>In the Azure Portal, create a <a href="https://portal.azure.com/#create/Microsoft.KeyVault" target="_blank" rel="noopener">
+                            new Key Vault <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i></a> (or use an existing one).</li>
+                        <li>In your <strong>Web App &rarr; Identity</strong>, ensure <strong>System assigned</strong> managed identity is <strong>On</strong>.</li>
+                        <li>In your <strong>Key Vault &rarr; Access control (IAM)</strong>, add a role assignment:
+                            <strong>Key Vault Secrets User</strong> &rarr; assign to your Web App's managed identity.</li>
+                        <li>Paste the Key Vault URL below and click <strong>Test Connection</strong>.</li>
+                    </ol>
+                </div>
+            </details>
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label">Key Vault URL</label>
+                    <input type="text" class="form-control form-control-sm mono" id="wiz_keyvault_url"
+                           value="{{ config.keyvault_url }}" placeholder="https://myvault.vault.azure.net/">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Anthropic Key Secret Name</label>
+                    <input type="text" class="form-control form-control-sm mono" id="wiz_kv_secret_anthropic"
+                           value="{{ config.keyvault_secret_anthropic_key or 'AnthropicComplianceKey' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Graph Secret Name</label>
+                    <input type="text" class="form-control form-control-sm mono" id="wiz_kv_secret_graph"
+                           value="{{ config.keyvault_secret_graph_secret or 'GraphClientSecret' }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted">Storage Conn Secret Name</label>
+                    <input type="text" class="form-control form-control-sm mono" id="wiz_kv_secret_storage"
+                           value="{{ config.keyvault_secret_storage_conn or 'AzureStorage' }}">
+                </div>
+            </div>
+            <div class="mt-3 d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-outline-success" id="testKvBtn">
+                    <i class="bi bi-lightning me-1"></i>Test Connection
+                </button>
+                <button type="button" class="btn btn-sm btn-warning" id="migrateKvBtn">
+                    <i class="bi bi-safe2 me-1"></i>Migrate Secrets to Key Vault
+                </button>
+            </div>
+            {% if config.credential_storage == 'keyvault' %}
+            <div class="alert alert-success py-2 small mt-3 mb-0">
+                <i class="bi bi-check-circle me-1"></i>Key Vault is already active.
+            </div>
+            {% endif %}
+            <div id="result3"></div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- STEP 4: Authentication                                     -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div class="step-panel" id="step-4">
+            <div class="step-title"><i class="bi bi-shield-lock me-2"></i>Authentication</div>
+            <div class="step-subtitle">Choose how users will sign in to {{ brand.app_name if brand else 'CCompliance' }}.</div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="auth-option" data-choice="entra" onclick="selectAuth('entra')">
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="radio" name="auth_choice" value="entra" class="form-check-input" id="authEntra">
+                            <label class="form-check-label fw-semibold" for="authEntra">
+                                <i class="bi bi-microsoft me-1"></i>Microsoft Entra ID (SSO)
+                            </label>
+                            <span class="badge bg-success ms-auto" style="font-size:10px">Recommended</span>
+                        </div>
+                        <div class="text-muted small mt-1 ms-4">Users sign in with their Microsoft account. Requires the App Registration from Step 1.</div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="auth-option" data-choice="both" onclick="selectAuth('both')">
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="radio" name="auth_choice" value="both" class="form-check-input" id="authBoth">
+                            <label class="form-check-label fw-semibold" for="authBoth">
+                                <i class="bi bi-people me-1"></i>Both (Entra ID + Local Users)
+                            </label>
+                        </div>
+                        <div class="text-muted small mt-1 ms-4">Entra ID as primary, with local username/password as fallback.</div>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <div class="auth-option selected" data-choice="local" onclick="selectAuth('local')">
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="radio" name="auth_choice" value="local" class="form-check-input" id="authLocal" checked>
+                            <label class="form-check-label fw-semibold" for="authLocal">
+                                <i class="bi bi-person-badge me-1"></i>Local Users Only
+                            </label>
+                        </div>
+                        <div class="text-muted small mt-1 ms-4">Username and password stored in Azure Table Storage. Already configured with your admin account.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entra ID fields (shown when entra or both selected) -->
+            <div id="entraFields" style="display:none">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title small"><i class="bi bi-microsoft me-1"></i>Entra ID Configuration</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small">Tenant ID</label>
+                                <input type="text" class="form-control form-control-sm mono" id="wiz_entra_tenant_id"
+                                       value="{{ auth_settings.get('entra_tenant_id', config.graph_tenant_id) }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">Client ID</label>
+                                <input type="text" class="form-control form-control-sm mono" id="wiz_entra_client_id"
+                                       value="{{ auth_settings.get('entra_client_id', config.graph_client_id) }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">Client Secret</label>
+                                <input type="password" class="form-control form-control-sm mono" id="wiz_entra_client_secret"
+                                       value="{{ auth_settings.get('entra_client_secret', '') }}" placeholder="Same secret from Step 1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">Redirect URI</label>
+                                <input type="text" class="form-control form-control-sm mono" id="wiz_entra_redirect_uri"
+                                       value="{{ auth_settings.get('entra_redirect_uri', '') or entra_redirect_uri }}">
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="grantConsentBtn">
+                                <i class="bi bi-shield-lock me-1"></i>Grant Admin Consent
+                            </button>
+                            <span class="ms-2 small text-muted" id="consentStatus">
+                                {% if config.graph_admin_consent_at %}
+                                <i class="bi bi-check-circle-fill text-success me-1"></i>Consent granted {{ config.graph_admin_consent_at[:10] }}
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="result4"></div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- STEP 5: Summary & Complete                                 -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <div class="step-panel" id="step-5">
+            <div class="step-title"><i class="bi bi-check2-all me-2"></i>Setup Complete</div>
+            <div class="step-subtitle">Review your configuration and launch the dashboard.</div>
+
+            <div class="row g-3">
+                <div class="col-md-7">
+                    <div class="card">
+                        <div class="card-header small fw-semibold">Configuration Summary</div>
+                        <div class="card-body p-0" id="summaryChecklist"></div>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6 class="card-title">Next Steps</h6>
+                            <ul class="list-unstyled small mb-0">
+                                <li class="mb-2"><i class="bi bi-arrow-repeat me-1 text-muted"></i>Configure Archive & Sync in Settings</li>
+                                <li class="mb-2"><i class="bi bi-people me-1 text-muted"></i>Add users in Settings &rarr; Users & Roles</li>
+                                <li><i class="bi bi-palette me-1 text-muted"></i>Customize branding in Settings &rarr; General</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="wizard-nav">
+            <button type="button" class="btn btn-outline-secondary" id="prevBtn" style="display:none">
+                <i class="bi bi-arrow-left me-1"></i>Previous
+            </button>
+            <div></div>
+            <button type="button" class="btn btn-primary" id="nextBtn">
+                Save &amp; Continue<i class="bi bi-arrow-right ms-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <p class="text-center text-muted small mt-3">
+        {{ brand.app_name if brand else 'CCompliance' }} &mdash; Created by Yellow Blue LLC.
+    </p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function() {
+    var STEPS = 5;
+    var currentStep = 1;
+    var kvOn = {{ 'true' if config.credential_storage == 'keyvault' else 'false' }};
+    var kvMigrated = kvOn;
+
+    // Track step data saved
+    var stepSaved = {
+        1: {{ 'true' if config.graph_tenant_id and config.graph_client_id and config.graph_client_secret else 'false' }},
+        2: {{ 'true' if config.anthropic_compliance_access_key else 'false' }},
+        3: kvOn,
+        4: false,
+        5: false
+    };
+
+    var prevBtn = document.getElementById('prevBtn');
+    var nextBtn = document.getElementById('nextBtn');
+
+    // ── Helpers ──────────────────────────────────────────────────────
+    function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function showResult(id, success, msg) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = '<div class="result-msg ' + (success ? 'result-ok' : 'result-err') + '">' +
+            '<i class="bi bi-' + (success ? 'check-circle' : 'x-circle') + ' me-1"></i>' +
+            esc(msg) + '</div>';
+    }
+
+    function postJSON(url, data, btn) {
+        return new Promise(function(resolve) {
+            var orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Working...';
+            fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+                .then(function(r) { return r.json(); })
+                .then(function(d) { resolve(d); })
+                .catch(function(e) { resolve({success: false, message: e.message}); })
+                .finally(function() { btn.disabled = false; btn.innerHTML = orig; });
+        });
+    }
+
+    function copyField(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        navigator.clipboard.writeText(el.value).then(function() {
+            var btn = el.nextElementSibling;
+            if (btn) { btn.innerHTML = '<i class="bi bi-check-lg text-success"></i>'; setTimeout(function(){ btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500); }
+        });
+    }
+    window.copyField = copyField;
+
+    // ── Navigation ───────────────────────────────────────────────────
+    function goToStep(n) {
+        if (n < 1 || n > STEPS) return;
+        currentStep = n;
+
+        // Show/hide panels
+        for (var i = 1; i <= STEPS; i++) {
+            var panel = document.getElementById('step-' + i);
+            if (panel) panel.classList.toggle('active', i === n);
+        }
+
+        // Update dots
+        for (var i = 1; i <= STEPS; i++) {
+            var dot = document.getElementById('dot-' + i);
+            var line = document.getElementById('line-' + i);
+            if (dot) {
+                dot.classList.remove('active', 'complete');
+                if (i === n) dot.classList.add('active');
+                else if (i < n || stepSaved[i]) dot.classList.add('complete');
+            }
+            if (line) {
+                line.classList.toggle('complete', i < n);
+            }
+        }
+
+        // Update label
+        document.getElementById('stepLabel').textContent = 'Step ' + n + ' of ' + STEPS;
+
+        // Update nav buttons
+        prevBtn.style.display = n > 1 ? '' : 'none';
+        if (n === STEPS) {
+            nextBtn.innerHTML = '<i class="bi bi-rocket-takeoff me-1"></i>Go to Dashboard';
+            nextBtn.className = 'btn btn-success';
+            buildSummary();
+        } else if (n === 3) {
+            nextBtn.innerHTML = (kvMigrated ? 'Continue' : 'Skip / Continue') + '<i class="bi bi-arrow-right ms-1"></i>';
+            nextBtn.className = 'btn btn-primary';
+        } else {
+            nextBtn.innerHTML = 'Save &amp; Continue<i class="bi bi-arrow-right ms-1"></i>';
+            nextBtn.className = 'btn btn-primary';
+        }
+
+        // If returning to step 4 after consent, check URL params
+        if (n === 4) restoreAuthState();
+    }
+
+    prevBtn.addEventListener('click', function() { goToStep(currentStep - 1); });
+
+    nextBtn.addEventListener('click', function() {
+        if (currentStep === STEPS) {
+            completeSetup();
+        } else if (currentStep === 1) {
+            saveStep1();
+        } else if (currentStep === 2) {
+            saveStep2();
+        } else if (currentStep === 3) {
+            // Step 3 is optional — just advance
+            goToStep(4);
+        } else if (currentStep === 4) {
+            saveStep4();
+        }
+    });
+
+    // ── Step 1: Save Graph ──────────────────────────────────────────
+    function saveStep1() {
+        var data = {
+            graph_tenant_id: document.getElementById('wiz_graph_tenant_id').value.trim(),
+            graph_client_id: document.getElementById('wiz_graph_client_id').value.trim(),
+            graph_client_secret: document.getElementById('wiz_graph_client_secret').value.trim(),
+        };
+        if (!data.graph_tenant_id || !data.graph_client_id || !data.graph_client_secret) {
+            showResult('result1', false, 'All three fields are required.');
+            return;
+        }
+        postJSON('/settings/api/wizard/save-graph', data, nextBtn).then(function(d) {
+            showResult('result1', d.success, d.message);
+            if (d.success) { stepSaved[1] = true; goToStep(2); }
+        });
+    }
+
+    // Test Graph button
+    document.getElementById('testGraphBtn').addEventListener('click', function() {
+        var btn = this;
+        var data = {
+            graph_tenant_id: document.getElementById('wiz_graph_tenant_id').value.trim(),
+            graph_client_id: document.getElementById('wiz_graph_client_id').value.trim(),
+            graph_client_secret: document.getElementById('wiz_graph_client_secret').value.trim(),
+        };
+        postJSON('/settings/api/wizard/test-graph', data, btn).then(function(d) {
+            showResult('result1', d.success, d.message);
+        });
+    });
+
+    // ── Step 2: Save Anthropic ──────────────────────────────────────
+    function saveStep2() {
+        var keyEl = document.getElementById('wiz_anthropic_key');
+        var data = {
+            anthropic_compliance_access_key: keyEl ? keyEl.value.trim() : '',
+            anthropic_base_url: document.getElementById('wiz_anthropic_base_url').value.trim(),
+        };
+        if (!data.anthropic_compliance_access_key) {
+            showResult('result2', false, 'Access key is required.');
+            return;
+        }
+        postJSON('/settings/api/wizard/save-anthropic', data, nextBtn).then(function(d) {
+            showResult('result2', d.success, d.message);
+            if (d.success) { stepSaved[2] = true; goToStep(3); }
+        });
+    }
+
+    document.getElementById('testAnthropicBtn').addEventListener('click', function() {
+        var btn = this;
+        var keyEl = document.getElementById('wiz_anthropic_key');
+        postJSON('/settings/api/wizard/test-anthropic', {
+            anthropic_compliance_access_key: keyEl ? keyEl.value.trim() : '',
+            anthropic_base_url: document.getElementById('wiz_anthropic_base_url').value.trim(),
+        }, btn).then(function(d) {
+            showResult('result2', d.success, d.message);
+        });
+    });
+
+    // ── Step 3: Key Vault ───────────────────────────────────────────
+    document.getElementById('testKvBtn').addEventListener('click', function() {
+        var btn = this;
+        postJSON('/settings/api/wizard/test-keyvault', {
+            keyvault_url: document.getElementById('wiz_keyvault_url').value.trim(),
+        }, btn).then(function(d) {
+            showResult('result3', d.success, d.message);
+        });
+    });
+
+    document.getElementById('migrateKvBtn').addEventListener('click', function() {
+        if (!confirm('This will write your secrets to Key Vault and remove them from config.json. Continue?')) return;
+        var btn = this;
+        postJSON('/settings/api/wizard/migrate-keyvault', {
+            keyvault_url: document.getElementById('wiz_keyvault_url').value.trim(),
+            keyvault_secret_anthropic_key: document.getElementById('wiz_kv_secret_anthropic').value.trim(),
+            keyvault_secret_graph_secret: document.getElementById('wiz_kv_secret_graph').value.trim(),
+            keyvault_secret_storage_conn: document.getElementById('wiz_kv_secret_storage').value.trim(),
+        }, btn).then(function(d) {
+            showResult('result3', d.success, d.message);
+            if (d.success) {
+                stepSaved[3] = true;
+                kvMigrated = true;
+                btn.style.display = 'none';
+            }
+        });
+    });
+
+    // ── Step 4: Auth Selection ──────────────────────────────────────
+    var selectedAuth = 'local';
+
+    window.selectAuth = function(choice) {
+        selectedAuth = choice;
+        document.querySelectorAll('.auth-option').forEach(function(el) {
+            el.classList.toggle('selected', el.dataset.choice === choice);
+        });
+        document.querySelectorAll('input[name="auth_choice"]').forEach(function(r) {
+            r.checked = r.value === choice;
+        });
+        var entraFields = document.getElementById('entraFields');
+        entraFields.style.display = (choice === 'entra' || choice === 'both') ? '' : 'none';
+    };
+
+    // Grant consent button
+    document.getElementById('grantConsentBtn').addEventListener('click', function() {
+        var btn = this;
+        postJSON('/setup/admin-consent', {}, btn).then(function(d) {
+            if (d.success && d.redirect_url) {
+                window.location.href = d.redirect_url;
+            } else {
+                showResult('result4', false, d.message || 'Failed to start consent flow.');
+            }
+        });
+    });
+
+    function saveStep4() {
+        var data = { auth_choice: selectedAuth };
+        if (selectedAuth === 'entra' || selectedAuth === 'both') {
+            data.entra_tenant_id = document.getElementById('wiz_entra_tenant_id').value.trim();
+            data.entra_client_id = document.getElementById('wiz_entra_client_id').value.trim();
+            data.entra_client_secret = document.getElementById('wiz_entra_client_secret').value.trim();
+            data.entra_redirect_uri = document.getElementById('wiz_entra_redirect_uri').value.trim();
+        }
+        postJSON('/setup/api/save-auth', data, nextBtn).then(function(d) {
+            showResult('result4', d.success, d.message);
+            if (d.success) { stepSaved[4] = true; goToStep(5); }
+        });
+    }
+
+    // Restore auth step state from URL params (after consent redirect)
+    function restoreAuthState() {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('consent_ok')) {
+            document.getElementById('consentStatus').innerHTML =
+                '<i class="bi bi-check-circle-fill text-success me-1"></i>Admin consent granted successfully.';
+        }
+        if (params.get('consent_error')) {
+            showResult('result4', false, 'Admin consent was not granted. Please try again.');
+        }
+    }
+
+    // ── Step 5: Summary & Complete ──────────────────────────────────
+    function buildSummary() {
+        var cl = document.getElementById('summaryChecklist');
+        if (!cl) return;
+        var items = [
+            {label: 'Azure App Registration (Graph API)', done: stepSaved[1]},
+            {label: 'Anthropic Compliance API', done: stepSaved[2]},
+            {label: 'Azure Key Vault', done: stepSaved[3], optional: true},
+            {label: 'Authentication configured', done: stepSaved[4]},
+        ];
+        var html = '';
+        items.forEach(function(it) {
+            html += '<div class="summary-item px-3">' +
+                '<i class="bi bi-' + (it.done ? 'check-circle-fill text-success' : (it.optional ? 'dash-circle text-warning' : 'circle text-muted')) + '" style="font-size:1.1rem"></i>' +
+                '<span>' + it.label + (it.optional && !it.done ? ' <span class="text-muted small">(skipped)</span>' : '') + '</span></div>';
+        });
+        cl.innerHTML = html;
+    }
+
+    function completeSetup() {
+        postJSON('/setup/api/complete', {}, nextBtn).then(function(d) {
+            if (d.success) {
+                window.location.href = '/';
+            } else {
+                showResult('result5', false, d.message || 'Failed to complete setup.');
+            }
+        });
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────
+    // Check URL params for step override (e.g., after consent redirect)
+    var params = new URLSearchParams(window.location.search);
+    var startStep = parseInt(params.get('step')) || 1;
+    if (startStep < 1 || startStep > STEPS) startStep = 1;
+    goToStep(startStep);
+})();
+</script>
+</body>
+</html>

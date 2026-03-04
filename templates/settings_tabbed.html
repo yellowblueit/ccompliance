@@ -19,20 +19,6 @@
     .blur-demo { filter: blur(3px); user-select: none; font-style: italic; }
     .role-badge { font-size: .75rem; }
     .mono { font-family: monospace, monospace; }
-    /* Wizard stepper */
-    .wizard-step { border-left: 3px solid #dee2e6; transition: border-color .2s; }
-    .wizard-step.step-complete { border-left-color: #16a34a; }
-    .wizard-step.step-active { border-left-color: var(--anthropic-purple, #6b21a8); }
-    .wizard-step-header:hover { background: #f8f9fa; }
-    .wizard-step-num { width: 24px; height: 24px; line-height: 24px; text-align: center; font-size: 11px; padding: 0; }
-    .wizard-step.step-complete .wizard-step-num { background-color: #16a34a !important; }
-    .wizard-step.step-active .wizard-step-num { background-color: var(--anthropic-purple, #6b21a8) !important; }
-    .wizard-step-body { border-top: 1px solid #e5e7eb; }
-    .wizard-chevron { transition: transform .2s; font-size: .8rem; }
-    .wizard-step-header[aria-expanded="false"] .wizard-chevron { transform: rotate(-90deg); }
-    .wizard-result { margin-top: 8px; font-size: 13px; }
-    .wizard-result.result-ok { color: #16a34a; }
-    .wizard-result.result-err { color: #dc2626; }
 </style>
 {% endblock %}
 
@@ -434,318 +420,162 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- TAB 4: API SETUP WIZARD                                        -->
+    <!-- TAB 4: API SETUP                                               -->
     <!-- ══════════════════════════════════════════════════════════════ -->
     <div class="tab-pane fade {% if active_tab == 'api_setup' %}show active{% endif %}"
          id="pane-api_setup" role="tabpanel">
 
         {% set kv_on = config.credential_storage == 'keyvault' %}
-        {% set has_graph = config.graph_tenant_id and config.graph_client_id and (config.graph_client_secret or kv_on) %}
-        {% set has_consent = config.graph_admin_consent_at %}
-        {% set has_anthropic = config.anthropic_compliance_access_key or kv_on %}
 
-        <div class="d-flex align-items-center gap-2 mb-4 small text-muted">
-            <i class="bi bi-magic me-1"></i><span>Setup Wizard</span>
-            <span class="ms-auto" id="wizardProgressText">0 of 4 steps complete</span>
-        </div>
+        <form method="POST" action="{{ url_for('settings.save') }}" enctype="multipart/form-data">
+            <input type="hidden" name="_tab" value="api_setup">
 
-        <!-- ─── Step 1: Azure App Registration ─────────────────────── -->
-        <div class="card mb-3 wizard-step" id="wizStep1">
-            <div class="card-header d-flex align-items-center gap-2 wizard-step-header" style="cursor:pointer" data-step="1">
-                <span class="badge rounded-pill bg-secondary wizard-step-num">1</span>
-                <span class="fw-semibold flex-grow-1"><i class="bi bi-microsoft me-1"></i>Azure App Registration</span>
-                <span class="badge bg-success d-none wizard-step-badge" id="wizBadge1"><i class="bi bi-check-lg"></i> Complete</span>
-                <i class="bi bi-chevron-down wizard-chevron"></i>
-            </div>
-            <div class="card-body wizard-step-body" id="wizBody1">
-                <div class="mb-3">
-                    <a class="text-decoration-none fw-semibold small" data-bs-toggle="collapse" href="#step1Guide" role="button"
-                       aria-expanded="{{ 'false' if has_graph else 'true' }}">
-                        <i class="bi bi-book me-1"></i>Setup Instructions <i class="bi bi-chevron-down ms-1" style="font-size:.7rem"></i>
-                    </a>
-                    <div class="collapse {{ '' if has_graph else 'show' }}" id="step1Guide">
-                        <div class="mt-2 p-3 rounded" style="background:#f8f9fa;border:1px solid #e9ecef">
-                            <ol class="mb-0 small" style="padding-left:1.2rem;line-height:1.9">
-                                <li>Go to <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">
-                                    Entra ID &rarr; App registrations <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i></a> and click <strong>New registration</strong>.</li>
-                                <li>Name: <em>CCompliance</em>, <strong>Single tenant</strong>, Redirect URI type <strong>Web</strong>:
-                                    <div class="input-group input-group-sm mt-1 mb-1" style="max-width:520px">
-                                        <input type="text" class="form-control mono bg-white" id="wizRedirectUri1"
-                                               value="{{ request.host_url.rstrip('/') }}/getAToken" readonly>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('wizRedirectUri1')" title="Copy">
-                                            <i class="bi bi-clipboard"></i>
-                                        </button>
-                                    </div>
-                                    Also add as a second Redirect URI:
-                                    <div class="input-group input-group-sm mt-1 mb-1" style="max-width:520px">
-                                        <input type="text" class="form-control mono bg-white" id="wizRedirectUri2"
-                                               value="{{ url_for('settings.admin_consent_callback', _external=True) }}" readonly>
-                                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('wizRedirectUri2')" title="Copy">
-                                            <i class="bi bi-clipboard"></i>
-                                        </button>
-                                    </div>
-                                </li>
-                                <li>Click <strong>Register</strong>. Copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> from the overview page.</li>
-                                <li>Go to <strong>Certificates &amp; secrets &rarr; New client secret</strong>. Copy the <strong>Value</strong> (not the Secret ID).</li>
-                            </ol>
+            <!-- Card 1: Microsoft Graph API -->
+            <div class="card mb-4">
+                <div class="card-header"><i class="bi bi-microsoft me-2"></i>Microsoft Graph API</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tenant ID</label>
+                            <input type="text" class="form-control form-control-sm mono" name="graph_tenant_id"
+                                   value="{{ config.graph_tenant_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Client ID</label>
+                            <input type="text" class="form-control form-control-sm mono" name="graph_client_id"
+                                   value="{{ config.graph_client_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Client Secret</label>
+                            {% if kv_on %}
+                            <div class="form-control form-control-sm bg-light text-muted d-flex align-items-center gap-2" style="cursor:default">
+                                <i class="bi bi-safe2"></i><span>Stored in Key Vault</span>
+                            </div>
+                            {% else %}
+                            <input type="password" class="form-control form-control-sm mono" name="graph_client_secret"
+                                   value="{{ config.graph_client_secret }}" placeholder="Leave blank to keep existing">
+                            {% endif %}
                         </div>
                     </div>
-                </div>
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Tenant ID</label>
-                        <input type="text" class="form-control form-control-sm mono" id="wiz_graph_tenant_id"
-                               value="{{ config.graph_tenant_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Client ID</label>
-                        <input type="text" class="form-control form-control-sm mono" id="wiz_graph_client_id"
-                               value="{{ config.graph_client_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-                    </div>
-                    <div class="col-md-4" id="wizGraphSecretCol">
-                        <label class="form-label">Client Secret</label>
-                        {% if kv_on %}
-                        <div class="form-control form-control-sm bg-light text-muted d-flex align-items-center gap-2" style="cursor:default" id="wizGraphSecretKvBadge">
-                            <i class="bi bi-safe2"></i><span>Stored in Key Vault</span>
-                        </div>
-                        {% else %}
-                        <input type="password" class="form-control form-control-sm mono" id="wiz_graph_client_secret"
-                               value="{{ config.graph_client_secret }}">
+                    <div class="mt-3 d-flex flex-wrap align-items-center gap-3">
+                        <form method="POST" action="{{ url_for('settings.test_graph') }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-lightning me-1"></i>Test Connection
+                            </button>
+                        </form>
+                        {% if config.graph_admin_consent_at %}
+                        <span class="text-success small">
+                            <i class="bi bi-check-circle-fill me-1"></i>Admin consent granted {{ config.graph_admin_consent_at[:10] }}
+                        </span>
+                        {% endif %}
+                        {% if config.graph_tenant_id and config.graph_client_id %}
+                        <form method="POST" action="{{ url_for('settings.admin_consent') }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-shield-lock me-1"></i>
+                                {{ 'Re-authorize' if config.graph_admin_consent_at else 'Grant Admin Consent' }}
+                            </button>
+                        </form>
                         {% endif %}
                     </div>
                 </div>
-                <div class="mt-3 d-flex align-items-center gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-success" id="wizTestGraph">
-                        <i class="bi bi-lightning me-1"></i>Test Connection
-                    </button>
-                    {% if not kv_on %}
-                    <button type="button" class="btn btn-sm btn-primary" id="wizSaveGraph">
-                        <i class="bi bi-check-lg me-1"></i>Save &amp; Continue
-                    </button>
-                    {% endif %}
-                </div>
-                <div id="wizResult1" class="mt-2"></div>
             </div>
-        </div>
 
-        <!-- ─── Step 2: API Permissions & Admin Consent ────────────── -->
-        <div class="card mb-3 wizard-step" id="wizStep2">
-            <div class="card-header d-flex align-items-center gap-2 wizard-step-header" style="cursor:pointer" data-step="2">
-                <span class="badge rounded-pill bg-secondary wizard-step-num">2</span>
-                <span class="fw-semibold flex-grow-1"><i class="bi bi-shield-check me-1"></i>API Permissions &amp; Admin Consent</span>
-                <span class="badge bg-success d-none wizard-step-badge" id="wizBadge2"><i class="bi bi-check-lg"></i> Complete</span>
-                <i class="bi bi-chevron-down wizard-chevron"></i>
-            </div>
-            <div class="card-body wizard-step-body" id="wizBody2" style="display:none">
-                <div class="mb-3">
-                    <a class="text-decoration-none fw-semibold small" data-bs-toggle="collapse" href="#step2Guide" role="button"
-                       aria-expanded="{{ 'false' if has_consent else 'true' }}">
-                        <i class="bi bi-book me-1"></i>Setup Instructions <i class="bi bi-chevron-down ms-1" style="font-size:.7rem"></i>
-                    </a>
-                    <div class="collapse {{ '' if has_consent else 'show' }}" id="step2Guide">
-                        <div class="mt-2 p-3 rounded" style="background:#f8f9fa;border:1px solid #e9ecef">
-                            <ol class="mb-0 small" style="padding-left:1.2rem;line-height:1.9">
-                                <li>In your App Registration, go to <strong>API permissions &rarr; Add a permission &rarr; Microsoft Graph &rarr; Application permissions</strong>.</li>
-                                <li>Add: <strong>User.Read.All</strong>, <strong>Mail.ReadWrite</strong>, <strong>Mail.Send</strong>.</li>
-                                <li>Click <strong>Grant Admin Consent</strong> below. A Global Admin must approve the permissions in Microsoft's consent dialog.</li>
-                            </ol>
+            <!-- Card 2: Anthropic Compliance API -->
+            <div class="card mb-4">
+                <div class="card-header"><i class="bi bi-key me-2"></i>Anthropic Compliance API</div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Compliance Access Key</label>
+                            {% if kv_on %}
+                            <div class="form-control form-control-sm bg-light text-muted d-flex align-items-center gap-2" style="cursor:default">
+                                <i class="bi bi-safe2"></i><span>Stored in Key Vault</span>
+                            </div>
+                            {% else %}
+                            <input type="password" class="form-control form-control-sm mono"
+                                   name="anthropic_compliance_access_key"
+                                   value="{{ config.anthropic_compliance_access_key }}" placeholder="sk-ant-api01-...">
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Base URL</label>
+                            <input type="text" class="form-control form-control-sm mono" name="anthropic_base_url"
+                                   value="{{ config.anthropic_base_url }}">
                         </div>
                     </div>
-                </div>
-                <div class="mb-3">
-                    <span class="fw-semibold small">Required Permissions</span>
-                    <div class="mt-1">
-                        <span class="badge bg-light text-dark border me-1">User.Read.All</span>
-                        <span class="badge bg-light text-dark border me-1">Mail.ReadWrite</span>
-                        <span class="badge bg-light text-dark border">Mail.Send</span>
+                    <div class="mt-3">
+                        <form method="POST" action="{{ url_for('settings.test_anthropic') }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-lightning me-1"></i>Test Connection
+                            </button>
+                        </form>
                     </div>
                 </div>
-                <div class="d-flex flex-wrap align-items-center gap-3">
-                    {% if config.graph_admin_consent_at %}
-                    <div class="text-success small">
-                        <i class="bi bi-check-circle-fill me-1"></i>Consent granted {{ config.graph_admin_consent_at[:10] }}
-                    </div>
-                    {% endif %}
-                    {% if config.graph_tenant_id and config.graph_client_id %}
-                    <form method="POST" action="{{ url_for('settings.admin_consent') }}" class="d-inline">
-                        <button type="submit" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-shield-lock me-1"></i>
-                            {{ 'Re-authorize' if config.graph_admin_consent_at else 'Grant Admin Consent' }}
-                        </button>
-                    </form>
-                    {% else %}
-                    <button type="button" class="btn btn-sm btn-outline-primary" disabled title="Complete Step 1 first">
-                        <i class="bi bi-shield-lock me-1"></i>Grant Admin Consent
-                    </button>
-                    {% endif %}
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="wizCheckConsent">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Check Status
-                    </button>
-                    <button type="button" class="btn btn-sm btn-link text-muted" id="wizSkip2">
-                        Skip for now &rarr;
-                    </button>
-                </div>
-                {% if not has_consent %}
-                <div class="alert alert-info py-2 small mt-3 mb-0">
-                    <i class="bi bi-info-circle me-1"></i>
-                    You can skip this step and come back later if the Global Admin is a different person.
-                </div>
-                {% endif %}
-                <div id="wizResult2" class="mt-2"></div>
             </div>
-        </div>
 
-        <!-- ─── Step 3: Anthropic Compliance API ───────────────────── -->
-        <div class="card mb-3 wizard-step" id="wizStep3">
-            <div class="card-header d-flex align-items-center gap-2 wizard-step-header" style="cursor:pointer" data-step="3">
-                <span class="badge rounded-pill bg-secondary wizard-step-num">3</span>
-                <span class="fw-semibold flex-grow-1"><i class="bi bi-key me-1"></i>Anthropic Compliance API</span>
-                <span class="badge bg-success d-none wizard-step-badge" id="wizBadge3"><i class="bi bi-check-lg"></i> Complete</span>
-                <i class="bi bi-chevron-down wizard-chevron"></i>
-            </div>
-            <div class="card-body wizard-step-body" id="wizBody3" style="display:none">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Compliance Access Key</label>
-                        {% if kv_on %}
-                        <div class="form-control form-control-sm bg-light text-muted d-flex align-items-center gap-2" style="cursor:default">
-                            <i class="bi bi-safe2"></i><span>Stored in Key Vault</span>
-                        </div>
-                        {% else %}
-                        <input type="password" class="form-control form-control-sm mono" id="wiz_anthropic_key"
-                               value="{{ config.anthropic_compliance_access_key }}" placeholder="sk-ant-api01-...">
-                        {% endif %}
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Base URL</label>
-                        <input type="text" class="form-control form-control-sm mono" id="wiz_anthropic_base_url"
-                               value="{{ config.anthropic_base_url }}">
-                    </div>
-                </div>
-                <div class="mt-3 d-flex align-items-center gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-success" id="wizTestAnthropic">
-                        <i class="bi bi-lightning me-1"></i>Test Connection
-                    </button>
-                    {% if not kv_on %}
-                    <button type="button" class="btn btn-sm btn-primary" id="wizSaveAnthropic">
-                        <i class="bi bi-check-lg me-1"></i>Save &amp; Continue
-                    </button>
-                    {% endif %}
-                </div>
-                <div id="wizResult3" class="mt-2"></div>
-            </div>
-        </div>
-
-        <!-- ─── Step 4: Azure Key Vault ────────────────────────────── -->
-        <div class="card mb-3 wizard-step" id="wizStep4">
-            <div class="card-header d-flex align-items-center gap-2 wizard-step-header" style="cursor:pointer" data-step="4">
-                <span class="badge rounded-pill bg-secondary wizard-step-num">4</span>
-                <span class="fw-semibold flex-grow-1">
-                    <i class="bi bi-safe2 me-1"></i>Azure Key Vault
-                    <span class="badge bg-success ms-2" style="font-size:10px">Recommended</span>
-                </span>
-                <span class="badge bg-success d-none wizard-step-badge" id="wizBadge4"><i class="bi bi-check-lg"></i> Complete</span>
-                <i class="bi bi-chevron-down wizard-chevron"></i>
-            </div>
-            <div class="card-body wizard-step-body" id="wizBody4" style="display:none">
-                <div class="mb-3">
-                    <a class="text-decoration-none fw-semibold small" data-bs-toggle="collapse" href="#step4Guide" role="button"
-                       aria-expanded="{{ 'false' if kv_on else 'true' }}">
-                        <i class="bi bi-book me-1"></i>Setup Instructions <i class="bi bi-chevron-down ms-1" style="font-size:.7rem"></i>
-                    </a>
-                    <div class="collapse {{ '' if kv_on else 'show' }}" id="step4Guide">
-                        <div class="mt-2 p-3 rounded" style="background:#f8f9fa;border:1px solid #e9ecef">
-                            <ol class="mb-0 small" style="padding-left:1.2rem;line-height:1.9">
-                                <li>In the Azure Portal, create a <a href="https://portal.azure.com/#create/Microsoft.KeyVault" target="_blank" rel="noopener">
-                                    new Key Vault <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i></a>
-                                    (or use an existing one).</li>
-                                <li>In your <strong>Web App &rarr; Identity</strong>, ensure <strong>System assigned</strong> managed identity is <strong>On</strong>.</li>
-                                <li>In your <strong>Key Vault &rarr; Access control (IAM)</strong>, add a role assignment:
-                                    <strong>Key Vault Secrets User</strong> &rarr; assign to your Web App's managed identity.</li>
-                                <li>Paste the Key Vault URL below and click <strong>Test Connection</strong>.</li>
-                                <li>Click <strong>Migrate Secrets</strong> to move your API keys into Key Vault and remove them from local storage.</li>
-                            </ol>
-                        </div>
-                    </div>
-                </div>
-                <div class="row g-3">
-                    <div class="col-12">
-                        <label class="form-label">Key Vault URL</label>
-                        <input type="text" class="form-control form-control-sm mono" id="wiz_keyvault_url"
-                               value="{{ config.keyvault_url }}" placeholder="https://myvault.vault.azure.net/">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small text-muted">Anthropic Key Secret Name</label>
-                        <input type="text" class="form-control form-control-sm mono" id="wiz_kv_secret_anthropic"
-                               value="{{ config.keyvault_secret_anthropic_key }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small text-muted">Graph Secret Name</label>
-                        <input type="text" class="form-control form-control-sm mono" id="wiz_kv_secret_graph"
-                               value="{{ config.keyvault_secret_graph_secret }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small text-muted">Storage Conn Secret Name</label>
-                        <input type="text" class="form-control form-control-sm mono" id="wiz_kv_secret_storage"
-                               value="{{ config.keyvault_secret_storage_conn }}">
-                    </div>
-                </div>
-                <div class="mt-3 d-flex align-items-center gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-success" id="wizTestKv">
-                        <i class="bi bi-lightning me-1"></i>Test Connection
-                    </button>
-                    {% if not kv_on %}
-                    <button type="button" class="btn btn-sm btn-warning" id="wizMigrateKv">
-                        <i class="bi bi-safe2 me-1"></i>Migrate Secrets to Key Vault
-                    </button>
-                    <button type="button" class="btn btn-sm btn-link text-muted" id="wizSkip4">
-                        Skip &rarr;
-                    </button>
-                    {% endif %}
-                </div>
-                {% if kv_on %}
-                <div class="alert alert-success py-2 small mt-3 mb-0">
-                    <i class="bi bi-check-circle me-1"></i>Key Vault is active. Secrets are stored securely via managed identity.
-                </div>
-                {% endif %}
-                <div id="wizResult4" class="mt-2"></div>
-            </div>
-        </div>
-
-        <!-- ─── Step 5: Summary ────────────────────────────────────── -->
-        <div class="card mb-3 wizard-step" id="wizStep5">
-            <div class="card-header d-flex align-items-center gap-2 wizard-step-header" style="cursor:pointer" data-step="5">
-                <span class="badge rounded-pill bg-secondary wizard-step-num">5</span>
-                <span class="fw-semibold flex-grow-1"><i class="bi bi-check2-all me-1"></i>Summary</span>
-                <i class="bi bi-chevron-down wizard-chevron"></i>
-            </div>
-            <div class="card-body wizard-step-body" id="wizBody5" style="display:none">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="list-group list-group-flush" id="wizSummaryChecklist"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <h6 class="card-title">Next Steps</h6>
-                                <ul class="list-unstyled small mb-0">
-                                    <li class="mb-2">
-                                        <a href="{{ url_for('settings.index', tab='auth') }}">
-                                            <i class="bi bi-shield-lock me-1"></i>Configure Entra ID Authentication
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="{{ url_for('settings.index', tab='sync') }}">
-                                            <i class="bi bi-arrow-repeat me-1"></i>Configure Archive &amp; Sync
-                                        </a>
-                                    </li>
-                                </ul>
+            <!-- Card 3: Credential Storage -->
+            <div class="card mb-4">
+                <div class="card-header"><i class="bi bi-safe2 me-2"></i>Credential Storage</div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="credential_storage" value="local"
+                                       id="credLocal" {{ 'checked' if not kv_on }}
+                                       onchange="document.getElementById('kvFields').style.display='none'">
+                                <label class="form-check-label" for="credLocal">Local (config.json)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="credential_storage" value="keyvault"
+                                       id="credKv" {{ 'checked' if kv_on }}
+                                       onchange="document.getElementById('kvFields').style.display=''">
+                                <label class="form-check-label" for="credKv">Azure Key Vault <span class="badge bg-success" style="font-size:10px">Recommended</span></label>
                             </div>
                         </div>
                     </div>
+                    <div id="kvFields" {% if not kv_on %}style="display:none"{% endif %}>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Key Vault URL</label>
+                                <input type="text" class="form-control form-control-sm mono" name="keyvault_url"
+                                       value="{{ config.keyvault_url }}" placeholder="https://myvault.vault.azure.net/">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small text-muted">Anthropic Key Secret Name</label>
+                                <input type="text" class="form-control form-control-sm mono" name="keyvault_secret_anthropic_key"
+                                       value="{{ config.keyvault_secret_anthropic_key }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small text-muted">Graph Secret Name</label>
+                                <input type="text" class="form-control form-control-sm mono" name="keyvault_secret_graph_secret"
+                                       value="{{ config.keyvault_secret_graph_secret }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small text-muted">Storage Conn Secret Name</label>
+                                <input type="text" class="form-control form-control-sm mono" name="keyvault_secret_storage_conn"
+                                       value="{{ config.keyvault_secret_storage_conn }}">
+                            </div>
+                        </div>
+                        <div class="mt-3 d-flex align-items-center gap-2">
+                            <form method="POST" action="{{ url_for('settings.test_keyvault') }}" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-success">
+                                    <i class="bi bi-lightning me-1"></i>Test Key Vault
+                                </button>
+                            </form>
+                            {% if kv_on %}
+                            <span class="text-success small"><i class="bi bi-check-circle me-1"></i>Key Vault is active.</span>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            <div class="pt-3 border-top text-end">
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg me-1"></i>Save API Settings
+                </button>
+            </div>
+        </form>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════ -->
@@ -970,10 +800,6 @@
 {% endblock %}
 
 {% block scripts %}
-{% set kv_on = config.credential_storage == 'keyvault' %}
-{% set has_graph = config.graph_tenant_id and config.graph_client_id and (config.graph_client_secret or kv_on) %}
-{% set has_consent = config.graph_admin_consent_at %}
-{% set has_anthropic = config.anthropic_compliance_access_key or kv_on %}
 <script>
 const ALL_PERMISSIONS = [
     "view_dashboard","view_activities","view_chats","view_chat_content",
@@ -1471,204 +1297,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function esc(s) { if (!s) return ''; var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
-    // ══════════════════════════════════════════════════════════════
-    // ── Setup Wizard Controller (API Setup tab) ──────────────────
-    // ══════════════════════════════════════════════════════════════
-    (function() {
-        var STEP_COUNT = 5;
-        var kvOn = {{ 'true' if kv_on else 'false' }};
-        var stepComplete = {
-            1: {{ 'true' if has_graph else 'false' }},
-            2: {{ 'true' if has_consent else 'false' }},
-            3: {{ 'true' if has_anthropic else 'false' }},
-            4: {{ 'true' if kv_on else 'false' }},
-            5: false
-        };
-
-        function updateStepUI() {
-            var count = 0;
-            for (var i = 1; i <= 4; i++) {
-                var step = document.getElementById('wizStep' + i);
-                var badge = document.getElementById('wizBadge' + i);
-                if (!step) continue;
-                if (stepComplete[i]) {
-                    count++;
-                    step.classList.add('step-complete');
-                    step.classList.remove('step-active');
-                    if (badge) badge.classList.remove('d-none');
-                } else {
-                    step.classList.remove('step-complete');
-                    if (badge) badge.classList.add('d-none');
-                }
-            }
-            var pt = document.getElementById('wizardProgressText');
-            if (pt) pt.textContent = count + ' of 4 steps complete';
-        }
-
-        function openStep(n) {
-            for (var i = 1; i <= STEP_COUNT; i++) {
-                var body = document.getElementById('wizBody' + i);
-                var step = document.getElementById('wizStep' + i);
-                var hdr = step ? step.querySelector('.wizard-step-header') : null;
-                if (!body || !step) continue;
-                if (i === n) {
-                    body.style.display = '';
-                    step.classList.add('step-active');
-                    if (hdr) hdr.setAttribute('aria-expanded', 'true');
-                } else {
-                    body.style.display = 'none';
-                    if (!stepComplete[i]) step.classList.remove('step-active');
-                    if (hdr) hdr.setAttribute('aria-expanded', 'false');
-                }
-            }
-            if (n === 5) buildSummary();
-        }
-
-        function showResult(id, success, msg) {
-            var el = document.getElementById(id);
-            if (!el) return;
-            el.innerHTML = '<div class="wizard-result ' + (success ? 'result-ok' : 'result-err') + '">' +
-                '<i class="bi bi-' + (success ? 'check-circle' : 'x-circle') + ' me-1"></i>' +
-                esc(msg) + '</div>';
-        }
-
-        function wizPost(url, data, btn, cb) {
-            var orig = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Working...';
-            fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
-                .then(function(r) { return r.json(); })
-                .then(function(d) { cb(d); })
-                .catch(function(e) { cb({success: false, message: e.message}); })
-                .finally(function() { btn.disabled = false; btn.innerHTML = orig; });
-        }
-
-        // Accordion click handlers
-        for (var s = 1; s <= STEP_COUNT; s++) {
-            (function(n) {
-                var hdr = document.querySelector('#wizStep' + n + ' .wizard-step-header');
-                if (hdr) hdr.addEventListener('click', function() {
-                    var body = document.getElementById('wizBody' + n);
-                    if (body && body.style.display === 'none') openStep(n);
-                    else if (body) { body.style.display = 'none'; hdr.setAttribute('aria-expanded', 'false'); }
-                });
-            })(s);
-        }
-
-        // ── Step 1: Test & Save Graph ──
-        var testGraphBtn = document.getElementById('wizTestGraph');
-        var saveGraphBtn = document.getElementById('wizSaveGraph');
-        if (testGraphBtn) testGraphBtn.addEventListener('click', function() {
-            var secretEl = document.getElementById('wiz_graph_client_secret');
-            wizPost('{{ url_for("settings.wizard_test_graph") }}', {
-                graph_tenant_id: document.getElementById('wiz_graph_tenant_id').value,
-                graph_client_id: document.getElementById('wiz_graph_client_id').value,
-                graph_client_secret: secretEl ? secretEl.value : '',
-            }, testGraphBtn, function(d) { showResult('wizResult1', d.success, d.message); });
-        });
-        if (saveGraphBtn) saveGraphBtn.addEventListener('click', function() {
-            var secretEl = document.getElementById('wiz_graph_client_secret');
-            wizPost('{{ url_for("settings.wizard_save_graph") }}', {
-                graph_tenant_id: document.getElementById('wiz_graph_tenant_id').value,
-                graph_client_id: document.getElementById('wiz_graph_client_id').value,
-                graph_client_secret: secretEl ? secretEl.value : '',
-            }, saveGraphBtn, function(d) {
-                showResult('wizResult1', d.success, d.message);
-                if (d.success) { stepComplete[1] = true; updateStepUI(); openStep(2); }
-            });
-        });
-
-        // ── Step 2: Check Consent & Skip ──
-        var checkConsentBtn = document.getElementById('wizCheckConsent');
-        var skipStep2Btn = document.getElementById('wizSkip2');
-        if (checkConsentBtn) checkConsentBtn.addEventListener('click', function() {
-            wizPost('{{ url_for("settings.wizard_check_consent") }}', {}, checkConsentBtn, function(d) {
-                if (d.granted) {
-                    stepComplete[2] = true; updateStepUI();
-                    showResult('wizResult2', true, 'Admin consent granted on ' + d.granted_at.substring(0, 10));
-                } else {
-                    showResult('wizResult2', false, 'Admin consent not yet detected. Click "Grant Admin Consent" above.');
-                }
-            });
-        });
-        if (skipStep2Btn) skipStep2Btn.addEventListener('click', function() { openStep(3); });
-
-        // ── Step 3: Test & Save Anthropic ──
-        var testAnthropicBtn = document.getElementById('wizTestAnthropic');
-        var saveAnthropicBtn = document.getElementById('wizSaveAnthropic');
-        if (testAnthropicBtn) testAnthropicBtn.addEventListener('click', function() {
-            var keyEl = document.getElementById('wiz_anthropic_key');
-            wizPost('{{ url_for("settings.wizard_test_anthropic") }}', {
-                anthropic_compliance_access_key: keyEl ? keyEl.value : '',
-                anthropic_base_url: document.getElementById('wiz_anthropic_base_url').value,
-            }, testAnthropicBtn, function(d) {
-                showResult('wizResult3', d.success, d.message);
-                if (d.success) { stepComplete[3] = true; updateStepUI(); }
-            });
-        });
-        if (saveAnthropicBtn) saveAnthropicBtn.addEventListener('click', function() {
-            var keyEl = document.getElementById('wiz_anthropic_key');
-            wizPost('{{ url_for("settings.wizard_save_anthropic") }}', {
-                anthropic_compliance_access_key: keyEl ? keyEl.value : '',
-                anthropic_base_url: document.getElementById('wiz_anthropic_base_url').value,
-            }, saveAnthropicBtn, function(d) {
-                showResult('wizResult3', d.success, d.message);
-                if (d.success) { stepComplete[3] = true; updateStepUI(); openStep(4); }
-            });
-        });
-
-        // ── Step 4: Test KV, Migrate, Skip ──
-        var testKvBtn = document.getElementById('wizTestKv');
-        var migrateKvBtn = document.getElementById('wizMigrateKv');
-        var skipStep4Btn = document.getElementById('wizSkip4');
-        if (testKvBtn) testKvBtn.addEventListener('click', function() {
-            wizPost('{{ url_for("settings.wizard_test_keyvault") }}', {
-                keyvault_url: document.getElementById('wiz_keyvault_url').value,
-            }, testKvBtn, function(d) { showResult('wizResult4', d.success, d.message); });
-        });
-        if (migrateKvBtn) migrateKvBtn.addEventListener('click', function() {
-            if (!confirm('This will write your secrets to Key Vault and remove them from config.json. Continue?')) return;
-            wizPost('{{ url_for("settings.wizard_migrate_keyvault") }}', {
-                keyvault_url: document.getElementById('wiz_keyvault_url').value,
-                keyvault_secret_anthropic_key: document.getElementById('wiz_kv_secret_anthropic').value,
-                keyvault_secret_graph_secret: document.getElementById('wiz_kv_secret_graph').value,
-                keyvault_secret_storage_conn: document.getElementById('wiz_kv_secret_storage').value,
-            }, migrateKvBtn, function(d) {
-                showResult('wizResult4', d.success, d.message);
-                if (d.success) {
-                    stepComplete[4] = true; kvOn = true;
-                    updateStepUI();
-                    migrateKvBtn.style.display = 'none';
-                    openStep(5);
-                }
-            });
-        });
-        if (skipStep4Btn) skipStep4Btn.addEventListener('click', function() { openStep(5); });
-
-        // ── Step 5: Summary ──
-        function buildSummary() {
-            var cl = document.getElementById('wizSummaryChecklist');
-            if (!cl) return;
-            var items = [
-                {label: 'Azure App Registration', done: stepComplete[1]},
-                {label: 'Admin Consent Granted', done: stepComplete[2]},
-                {label: 'Anthropic Compliance API', done: stepComplete[3]},
-                {label: 'Azure Key Vault', done: stepComplete[4]},
-            ];
-            cl.innerHTML = items.map(function(it) {
-                return '<div class="list-group-item d-flex align-items-center gap-2">' +
-                    '<i class="bi bi-' + (it.done ? 'check-circle-fill text-success' : 'circle text-muted') + '"></i>' +
-                    '<span>' + it.label + '</span></div>';
-            }).join('');
-        }
-
-        // Initialize: open first incomplete step
-        updateStepUI();
-        var first = 0;
-        for (var i = 1; i <= STEP_COUNT; i++) { if (!stepComplete[i]) { first = i; break; } }
-        if (first === 0) first = 5;
-        openStep(first);
-    })();
 });
 </script>
 {% endblock %}

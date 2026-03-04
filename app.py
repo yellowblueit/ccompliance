@@ -219,6 +219,7 @@ def create_app():
     from routes.users import users_bp
     from routes.roles import roles_bp
     from routes.scim import scim_bp
+    from routes.setup import setup_bp
 
     app.register_blueprint(auth_local_bp)
     app.register_blueprint(dashboard_bp)
@@ -231,9 +232,16 @@ def create_app():
     app.register_blueprint(users_bp, url_prefix="/settings/users")
     app.register_blueprint(roles_bp, url_prefix="/settings/roles")
     app.register_blueprint(scim_bp, url_prefix="/scim/v2")
+    app.register_blueprint(setup_bp, url_prefix="/setup")
 
     @app.route("/")
     def index():
+        # Redirect to setup wizard if first-run setup is not complete
+        store = app.config.get("APP_SETTINGS_STORE")
+        if store:
+            setup_done = store.get_setting("setup_complete", "false").lower() == "true"
+            if not setup_done:
+                return redirect(url_for("setup.index"))
         return redirect(url_for("dashboard.index"))
 
     if app_config.get("sync_enabled") and app_config.get("anthropic_compliance_access_key"):

@@ -51,6 +51,17 @@ def login_required(f):
 
         if "user" not in session:
             return redirect(url_for("auth_local.login"))
+
+        # Redirect to setup wizard if first-run setup is not complete
+        # (skip for /setup paths and /settings/api/wizard paths to avoid loops)
+        path = request.path
+        if not path.startswith("/setup") and not path.startswith("/settings/api/wizard"):
+            store = current_app.config.get("APP_SETTINGS_STORE")
+            if store:
+                setup_done = store.get_setting("setup_complete", "false").lower() == "true"
+                if not setup_done:
+                    return redirect(url_for("setup.index"))
+
         return f(*args, **kwargs)
     return decorated
 

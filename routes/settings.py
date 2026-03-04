@@ -139,6 +139,30 @@ def save():
                 "keyvault_secret_storage_conn": request.form.get("keyvault_secret_storage_conn", "storage-connection-string").strip(),
             })
 
+    elif tab == "api_setup":
+        # Combined flat-field save for the API Setup tab (Graph + Anthropic + Credential Storage)
+        updates = {
+            "graph_tenant_id": request.form.get("graph_tenant_id", "").strip(),
+            "graph_client_id": request.form.get("graph_client_id", "").strip(),
+            "anthropic_base_url": request.form.get("anthropic_base_url", "https://api.anthropic.com").strip(),
+        }
+        # Only update secrets if provided (not blank = keep existing)
+        graph_secret = request.form.get("graph_client_secret", "").strip()
+        if graph_secret:
+            updates["graph_client_secret"] = graph_secret
+        anthropic_key = request.form.get("anthropic_compliance_access_key", "").strip()
+        if anthropic_key:
+            updates["anthropic_compliance_access_key"] = anthropic_key
+        # Credential storage
+        updates["credential_storage"] = cred_storage
+        if cred_storage == "keyvault":
+            updates.update({
+                "keyvault_url": request.form.get("keyvault_url", "").strip(),
+                "keyvault_secret_anthropic_key": request.form.get("keyvault_secret_anthropic_key", "anthropic-compliance-access-key").strip(),
+                "keyvault_secret_graph_secret": request.form.get("keyvault_secret_graph_secret", "graph-client-secret").strip(),
+                "keyvault_secret_storage_conn": request.form.get("keyvault_secret_storage_conn", "storage-connection-string").strip(),
+            })
+
     elif tab == "auth":
         # Auth settings go to AppSettingsStore, not config.json
         entra_enabled = request.form.get("entra_enabled") == "on"
