@@ -135,8 +135,8 @@ def _get_keyvault_client(vault_url, config=None):
 def _load_keyvault_secrets(config):
     """If keyvault mode is active, fetch secrets and overlay onto config.
 
-    This is NOT called during startup — it is invoked explicitly from the
-    Settings UI when the user saves or tests Key Vault configuration.
+    Called at startup (from app.py) and from the Settings UI when the user
+    saves or tests Key Vault configuration.
     """
     if config.get("credential_storage") != "keyvault":
         return

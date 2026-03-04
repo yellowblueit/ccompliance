@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from flask import Flask, redirect, url_for, session
-from config import load_config
+from config import load_config, _load_keyvault_secrets
 from auth import init_auth
 
 
@@ -59,6 +59,15 @@ def create_app():
     app = Flask(__name__)
 
     app_config = load_config()
+
+    # If Key Vault mode is active, fetch secrets before anything else
+    # (storage_connection_string, anthropic key, etc. may live in KV)
+    if app_config.get("credential_storage") == "keyvault" and app_config.get("keyvault_url"):
+        try:
+            _load_keyvault_secrets(app_config)
+        except Exception as e:
+            logging.getLogger(__name__).warning("Key Vault secret load at startup failed: %s", e)
+
     app.secret_key = app_config["flask_secret_key"] or os.urandom(32).hex()
     app.config["APP_CONFIG"] = app_config
     app.config["SESSION_TYPE"] = "filesystem"
