@@ -6,7 +6,8 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
     session, current_app, send_file, jsonify
 from werkzeug.utils import secure_filename
 from config import load_config, save_config, test_keyvault_connection, \
-    save_to_keyvault, get_wizard_status, SECRET_NAME_MAP, CONFIG_FILE
+    save_to_keyvault, get_wizard_status, SECRET_NAME_MAP, CONFIG_FILE, \
+    _load_keyvault_secrets
 from routes import login_required, require_permission
 
 UPLOAD_DIR = Path(__file__).parent.parent / "static" / "uploads"
@@ -203,6 +204,7 @@ def save():
 @login_required
 def test_anthropic():
     config = load_config()
+    _load_keyvault_secrets(config)
     try:
         from clients.anthropic_client import AnthropicComplianceClient
         client = AnthropicComplianceClient(
@@ -220,6 +222,7 @@ def test_anthropic():
 @login_required
 def test_graph():
     config = load_config()
+    _load_keyvault_secrets(config)
     try:
         from clients.graph_client import GraphClient
         client = GraphClient(

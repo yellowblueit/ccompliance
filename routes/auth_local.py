@@ -2,6 +2,7 @@
 Local authentication: username/password login and logout.
 Entra ID login/callback is handled by identity.flask.Auth (registered in app.py).
 """
+import os
 import logging
 from flask import (
     Blueprint, render_template, request, session, redirect,
@@ -23,7 +24,8 @@ def _local_auth_enabled():
         except Exception:
             pass
     cfg = current_app.config.get("APP_CONFIG", {})
-    return cfg.get("local_auth_enabled", False)
+    # Default to True in local dev (no store) so admin can log in via env vars
+    return cfg.get("local_auth_enabled", True)
 
 
 @auth_local_bp.route("/login", methods=["GET", "POST"])
@@ -64,9 +66,33 @@ def login():
         return render_template("login.html", entra_enabled=entra_enabled, local_enabled=True)
 
     user_store = current_app.config.get("USER_STORE")
+
     if not user_store:
-        flash("User store not configured. Check Azure Storage connection.", "danger")
-        return render_template("login.html", entra_enabled=entra_enabled, local_enabled=True)
+        # Fallback for local dev: authenticate against ADMIN env vars
+        admin_user = os.environ.get("ADMIN_USERNAME", "").strip()
+        admin_pass = os.environ.get("ADMIN_PASSWORD", "").strip()
+        if not admin_user or not admin_pass:
+            flash("No user store and no ADMIN_USERNAME/ADMIN_PASSWORD env vars set.", "danger")
+            return render_template("login.html", entra_enabled=entra_enabled, local_enabled=True)
+        if username != admin_user or password != admin_pass:
+            flash("Invalid username or password.", "danger")
+            return render_template("login.html", entra_enabled=entra_enabled, local_enabled=True)
+        session["user"] = {
+            "id": "local-admin",
+            "name": "Administrator",
+            "preferred_username": admin_user,
+            "role_id": "super_admin",
+            "role_name": "Super Admin",
+            "permissions": [
+                "view_dashboard", "view_activities", "view_chats",
+                "view_projects", "view_organizations", "manage_sync",
+                "manage_settings", "manage_users",
+            ],
+            "auth_type": "local",
+        }
+        logger.info("Local dev login: %s (env-var fallback)", admin_user)
+        next_url = request.args.get("next") or url_for("dashboard.index")
+        return redirect(next_url)
 
     user = user_store.get_user_by_username(username)
     if not user or not user.get("is_active"):
