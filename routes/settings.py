@@ -5,9 +5,9 @@ from urllib.parse import urlencode
 from flask import Blueprint, render_template, request, flash, redirect, url_for, \
     session, current_app, send_file, jsonify
 from werkzeug.utils import secure_filename
-from config import load_config, save_config, test_keyvault_connection, \
-    save_to_keyvault, get_wizard_status, SECRET_NAME_MAP, CONFIG_FILE, \
-    _load_keyvault_secrets
+from config import load_config, load_config_with_secrets, save_config, \
+    test_keyvault_connection, save_to_keyvault, get_wizard_status, \
+    SECRET_NAME_MAP, CONFIG_FILE, _load_keyvault_secrets
 from routes import login_required, require_permission
 
 UPLOAD_DIR = Path(__file__).parent.parent / "static" / "uploads"
@@ -194,7 +194,7 @@ def save():
 
     if updates:
         save_config(updates)
-        current_app.config["APP_CONFIG"] = load_config()
+        current_app.config["APP_CONFIG"] = load_config_with_secrets()
 
     flash("Settings saved.", "success")
     return redirect(url_for("settings.index", tab=redirect_tab))
@@ -281,7 +281,7 @@ def admin_consent_callback():
     # Success — save timestamp
     now = datetime.now(timezone.utc).isoformat()
     save_config({"graph_admin_consent_at": now})
-    current_app.config["APP_CONFIG"] = load_config()
+    current_app.config["APP_CONFIG"] = load_config_with_secrets()
     flash("Admin consent granted successfully. API permissions are now authorized.", "success")
     return redirect(url_for("settings.index", tab="api_setup"))
 
@@ -462,7 +462,7 @@ def save_archive_users():
     if not isinstance(user_ids, list):
         return jsonify({"error": "user_ids must be a list"}), 400
     save_config({"archive_user_ids": user_ids, "archive_all_users": archive_all})
-    current_app.config["APP_CONFIG"] = load_config()
+    current_app.config["APP_CONFIG"] = load_config_with_secrets()
     return jsonify({"status": "ok", "count": len(user_ids), "archive_all": archive_all})
 
 
@@ -483,7 +483,7 @@ def remove_logo():
             store.delete_setting("cfg_logo_data")
         except Exception:
             pass
-    current_app.config["APP_CONFIG"] = load_config()
+    current_app.config["APP_CONFIG"] = load_config_with_secrets()
     flash("Logo removed.", "success")
     return redirect(url_for("settings.index", tab="general"))
 
@@ -540,7 +540,7 @@ def wizard_save_graph():
         "graph_client_secret": data.get("graph_client_secret", "").strip(),
     }
     save_config(updates)
-    current_app.config["APP_CONFIG"] = load_config()
+    current_app.config["APP_CONFIG"] = load_config_with_secrets()
     return jsonify({"success": True, "message": "App registration credentials saved."})
 
 
@@ -595,7 +595,7 @@ def wizard_save_anthropic():
         "anthropic_base_url": data.get("anthropic_base_url", "https://api.anthropic.com").strip(),
     }
     save_config(updates)
-    current_app.config["APP_CONFIG"] = load_config()
+    current_app.config["APP_CONFIG"] = load_config_with_secrets()
     return jsonify({"success": True, "message": "Anthropic API credentials saved."})
 
 
@@ -661,7 +661,7 @@ def wizard_migrate_keyvault():
     kv_updates = {"credential_storage": "keyvault", "keyvault_url": vault_url}
     kv_updates.update(secret_names)
     save_config(kv_updates)
-    current_app.config["APP_CONFIG"] = load_config()
+    current_app.config["APP_CONFIG"] = load_config_with_secrets()
 
     return jsonify({
         "success": True,

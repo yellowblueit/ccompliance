@@ -275,6 +275,17 @@ def load_config():
     return config
 
 
+def load_config_with_secrets():
+    """Load config and overlay Key Vault secrets when KV mode is active.
+
+    Use this instead of load_config() when refreshing the in-memory
+    APP_CONFIG so that secrets aren't lost.
+    """
+    config = load_config()
+    _load_keyvault_secrets(config)
+    return config
+
+
 # Keys that must never be saved to config.json
 _NEVER_SAVE_KEYS = {
     "entra_client_id", "entra_client_secret", "entra_tenant_id",

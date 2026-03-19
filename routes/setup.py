@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 from flask import Blueprint, render_template, request, redirect, url_for, \
     session, current_app, jsonify
-from config import load_config, save_config
+from config import load_config, load_config_with_secrets, save_config
 from routes import login_required, require_permission
 
 setup_bp = Blueprint("setup", __name__)
@@ -137,5 +137,5 @@ def admin_consent_callback():
     # Success — save timestamp
     now = datetime.now(timezone.utc).isoformat()
     save_config({"graph_admin_consent_at": now})
-    current_app.config["APP_CONFIG"] = load_config()
+    current_app.config["APP_CONFIG"] = load_config_with_secrets()
     return redirect(url_for("setup.index") + "?step=4&consent_ok=1")
