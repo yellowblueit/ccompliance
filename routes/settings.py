@@ -7,7 +7,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from werkzeug.utils import secure_filename
 from config import load_config, load_config_with_secrets, save_config, \
     test_keyvault_connection, save_to_keyvault, get_wizard_status, \
-    SECRET_NAME_MAP, CONFIG_FILE, _load_keyvault_secrets
+    SECRET_NAME_MAP, CONFIG_FILE, _load_keyvault_secrets, invalidate_keyvault_cache
 from routes import login_required, require_permission
 
 UPLOAD_DIR = Path(__file__).parent.parent / "static" / "uploads"
@@ -658,6 +658,7 @@ def wizard_migrate_keyvault():
         return jsonify({"success": False, "message": f"Failed to write to Key Vault: {e}"})
 
     # Switch config to keyvault mode (save_config will strip SECRET_KEYS from file)
+    invalidate_keyvault_cache()  # force fresh fetch after migration
     kv_updates = {"credential_storage": "keyvault", "keyvault_url": vault_url}
     kv_updates.update(secret_names)
     save_config(kv_updates)

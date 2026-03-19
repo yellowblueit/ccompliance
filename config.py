@@ -224,19 +224,36 @@ def _get_keyvault_client(vault_url, config=None):
     return SecretClient(vault_url=vault_url, credential=credential)
 
 
-def _load_keyvault_secrets(config):
+import time as _time
+
+# In-memory cache for Key Vault secrets
+_kv_cache = {"secrets": {}, "ts": 0}
+_KV_CACHE_TTL = 300  # 5 minutes
+
+
+def _load_keyvault_secrets(config, force=False):
     """If keyvault mode is active, fetch secrets and overlay onto config.
 
-    Called at startup (from app.py) and from the Settings UI when the user
-    saves or tests Key Vault configuration.
+    Caches secrets in memory for up to 5 minutes to avoid repeated
+    network round-trips to Key Vault on every config reload.
+    Use force=True to bypass the cache (e.g. after migration).
     """
     if config.get("credential_storage") != "keyvault":
         return
     vault_url = config.get("keyvault_url", "").strip()
     if not vault_url:
         return
+
+    now = _time.time()
+    if not force and _kv_cache["secrets"] and (now - _kv_cache["ts"]) < _KV_CACHE_TTL:
+        # Use cached secrets
+        for config_key, value in _kv_cache["secrets"].items():
+            config[config_key] = value
+        return
+
     try:
         client = _get_keyvault_client(vault_url, config)
+        fetched = {}
         for config_key, name_key in SECRET_NAME_MAP.items():
             secret_name = config.get(name_key, "")
             if not secret_name:
@@ -244,11 +261,22 @@ def _load_keyvault_secrets(config):
             try:
                 secret = client.get_secret(secret_name)
                 if secret.value:
-                    config[config_key] = secret.value
+                    fetched[config_key] = secret.value
             except Exception as e:
                 logger.warning("Key Vault: could not read '%s': %s", secret_name, e)
+
+        # Update cache and config
+        _kv_cache["secrets"] = fetched
+        _kv_cache["ts"] = now
+        config.update(fetched)
     except Exception as e:
         logger.error("Key Vault connection failed: %s", e)
+
+
+def invalidate_keyvault_cache():
+    """Clear the KV secret cache (call after migrating secrets to KV)."""
+    _kv_cache["secrets"] = {}
+    _kv_cache["ts"] = 0
 
 
 def load_config():
