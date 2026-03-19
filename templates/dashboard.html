@@ -14,13 +14,11 @@
 <!-- Status indicators -->
 <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
     <!-- Status badges -->
-    <span class="badge rounded-pill {{ 'bg-success' if status.anthropic_configured else 'bg-warning text-dark' }} d-inline-flex align-items-center gap-1 py-2 px-3">
+    <span class="badge rounded-pill {{ 'bg-success' if status.anthropic_configured else 'bg-warning text-dark' }} d-inline-flex align-items-center gap-1 py-2 px-3" id="anthropicBadge">
         <i class="bi {{ 'bi-check-circle' if status.anthropic_configured else 'bi-exclamation-circle' }}"></i>
         Anthropic API
-        {% if status.anthropic_configured and org_count is not none %}
-            &middot; {{ org_count }} org{{ 's' if org_count != 1 }}
-        {% elif api_error %}
-            <span class="text-danger ms-1" title="{{ api_error }}">Error</span>
+        {% if status.anthropic_configured %}
+        <span id="orgCountLabel">&middot; <span class="spinner-border spinner-border-sm" style="width:.7em;height:.7em"></span></span>
         {% endif %}
     </span>
 
@@ -130,6 +128,21 @@
 {% if status.anthropic_configured %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Async org count
+    var orgLabel = document.getElementById('orgCountLabel');
+    if (orgLabel) {
+        fetch('{{ url_for("dashboard.api_org_count") }}')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.org_count !== null) {
+                    orgLabel.textContent = '\u00b7 ' + d.org_count + ' org' + (d.org_count !== 1 ? 's' : '');
+                } else if (d.error) {
+                    orgLabel.innerHTML = '<span class="text-danger" title="' + d.error + '">Error</span>';
+                }
+            })
+            .catch(function() { orgLabel.textContent = ''; });
+    }
+
     var accentColor = '{{ brand.accent_color|default("#6b21a8") }}';
     var catColors = ['#6b21a8', '#2563eb', '#059669', '#d97706', '#dc2626', '#6366f1', '#9ca3af'];
     var embedOpts = {actions: false, renderer: 'svg'};

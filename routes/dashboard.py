@@ -35,23 +35,25 @@ def index():
         "archive_user_count": len(archive_user_ids) if not archive_all else None,
     }
 
-    org_count = None
-    api_error = None
-    if status["anthropic_configured"]:
-        try:
-            client = get_anthropic_client()
-            orgs = client.list_organizations()
-            org_data = orgs if isinstance(orgs, list) else orgs.get("data", [])
-            org_count = len(org_data)
-        except Exception as e:
-            api_error = str(e)
-
     return render_template("dashboard.html",
                            user=session.get("user", {}),
                            status=status,
-                           org_count=org_count,
-                           api_error=api_error,
                            config=config)
+
+
+@dashboard_bp.route("/dashboard/api/org-count")
+@login_required
+def api_org_count():
+    """Return org count asynchronously so the dashboard renders instantly."""
+    client = get_anthropic_client()
+    if not client:
+        return jsonify({"org_count": None, "error": "Anthropic API not configured"})
+    try:
+        orgs = client.list_organizations()
+        org_data = orgs if isinstance(orgs, list) else orgs.get("data", [])
+        return jsonify({"org_count": len(org_data)})
+    except Exception as e:
+        return jsonify({"org_count": None, "error": str(e)})
 
 
 @dashboard_bp.route("/dashboard/api/activity-stats")
