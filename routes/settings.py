@@ -302,20 +302,31 @@ def test_keyvault():
         flash("Key Vault URL is not configured.", "warning")
         return redirect(url_for("settings.index", tab="api_setup"))
 
-    # Check both credential paths: Entra creds OR Graph creds (same app reg)
+    # Check credential paths: Managed Identity, Entra creds, or Graph creds
+    import os
+    has_managed_id = bool(os.environ.get("WEBSITE_SITE_NAME"))
     has_entra = all(config.get(k) for k in ("entra_tenant_id", "entra_client_id", "entra_client_secret"))
     has_graph = all(config.get(k) for k in ("graph_tenant_id", "graph_client_id", "graph_client_secret"))
-    cred_source = "Entra ID" if has_entra else ("Graph API" if has_graph else None)
+
+    if has_managed_id:
+        cred_source = "Managed Identity"
+    elif has_entra:
+        cred_source = "Entra ID"
+    elif has_graph:
+        cred_source = "Graph API"
+    else:
+        cred_source = None
 
     current_app.logger.info(
-        "Key Vault test — cred_source=%s, entra=%s, graph=%s",
-        cred_source, has_entra, has_graph,
+        "Key Vault test — cred_source=%s, managed_id=%s, entra=%s, graph=%s",
+        cred_source, has_managed_id, has_entra, has_graph,
     )
 
     if not cred_source:
         flash(
             "Key Vault test will use DefaultAzureCredential (no app credentials found). "
-            "Configure the Microsoft Graph API card on the API Setup tab first.",
+            "Configure the Microsoft Graph API card on the API Setup tab first, "
+            "or deploy to Azure with a Managed Identity.",
             "warning"
         )
 

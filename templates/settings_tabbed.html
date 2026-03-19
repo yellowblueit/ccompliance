@@ -447,13 +447,10 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Client Secret</label>
-                            {% if kv_on %}
-                            <div class="form-control form-control-sm bg-light text-muted d-flex align-items-center gap-2" style="cursor:default">
-                                <i class="bi bi-safe2"></i><span>Stored in Key Vault</span>
-                            </div>
-                            {% else %}
                             <input type="password" class="form-control form-control-sm mono" name="graph_client_secret"
                                    value="{{ config.graph_client_secret }}" placeholder="Leave blank to keep existing">
+                            {% if kv_on %}
+                            <div class="form-text"><i class="bi bi-info-circle me-1"></i>Also used to authenticate to Key Vault in local dev. On Azure, Managed Identity is used instead.</div>
                             {% endif %}
                         </div>
                     </div>
