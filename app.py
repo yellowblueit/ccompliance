@@ -115,11 +115,21 @@ def create_app():
             # Overlay cloud-persisted config (restores settings after redeployment)
             cloud_cfg = load_config_from_cloud(app_settings_store)
             if cloud_cfg:
+                # Filter out keys overridden by env vars
+                restored = {}
                 for key, value in cloud_cfg.items():
                     env_name = ENV_MAP.get(key)
                     if env_name and os.environ.get(env_name) is not None:
                         continue   # env var takes priority
-                    app_config[key] = value
+                    restored[key] = value
+                if restored:
+                    # Write back to config.json so subsequent load_config()
+                    # calls find the restored values (not just in-memory)
+                    from config import save_config
+                    save_config(restored)
+                    # Reload fully (config.json + env vars + KV secrets)
+                    app_config = load_config_with_secrets()
+                    app.config["APP_CONFIG"] = app_config
             else:
                 # First run: seed cloud store from current config so existing
                 # settings survive future redeployments
